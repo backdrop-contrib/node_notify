@@ -1,0 +1,34 @@
+<?php
+
+/**
+ * Implements hook_permissions().
+ */
+function node_notify_permissions () {
+  return array(
+    'administer node notify' => array(
+      'title' => 'Administer Node Notify',
+      'description' => 'Change global Node Notify settings.',
+    ),
+    'subscribe to node' => array(
+      'title' => 'Subscribe to node notifications.',
+      'description' => 'Subscribe to recieve notifications about new node comments.',
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function node_notify_menu () {
+  $items = array();
+
+  $items['admin/config/people/node_notify'] = array(
+    'title' => 'Node notify',
+    'description' => '',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('node_notify_settings_form'),
+    'access arguments' => array('administer node notify'),
+  );
+
+  return $items;
+}

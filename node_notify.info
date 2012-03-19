@@ -1,0 +1,12 @@
+name = Node Notify
+description = Comment notifications for nodes for anonymous and registered users.
+core = 7.x
+
+configure = admin/config/people/node_notify
+
+dependencies[] = node
+dependencies[] = comment
+dependencies[] = token
+
+files[] = node_notify.install
+files[] = node_notify.module
