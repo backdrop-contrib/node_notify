@@ -1,13 +1,43 @@
 <?php
 
+define('NODE_NOTIFY_PENDING', 0);
+define('NODE_NOTIFY_SENT', 1);
+define('NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY', 2);
+define('NODE_NOTIFY_SKIPPED', 3);
+
+define('NODE_NOTIFY_DEFAULT_NOTIFICATION_SUBJECT', 'New comment on "[comment:node:title]" by [comment:author]');
+define('NODE_NOTIFY_DEFAULT_NOTIFICATION_BODY', 'Hi [subscriber:name],
+
+[comment:author] has commented on: "[comment:node:title]"
+
+----
+[comment:title]
+
+[comment:body]
+----
+
+You can view the comment at the following url
+[comment:url]
+
+You can stop receiving emails when someone replies to this post,
+by going to [subscription:unsubscribe-url]
+
+-- [site:name] team
+[site:url]');
+
+
 /**
- * Implements hook_permissions().
+ * Implements hook_permission().
  */
-function node_notify_permissions () {
+function node_notify_permission () {
   return array(
     'administer node notify' => array(
       'title' => 'Administer Node Notify',
       'description' => 'Change global Node Notify settings.',
+    ),
+    'administer node subscriptions' => array(
+      'title' => 'Administer node subscriptions',
+      'description' => 'View and edit node subscriptions.',
     ),
     'subscribe to node' => array(
       'title' => 'Subscribe to node notifications.',
@@ -24,11 +54,734 @@ function node_notify_menu () {
 
   $items['admin/config/people/node_notify'] = array(
     'title' => 'Node notify',
-    'description' => '',
+    'description' => 'Configure Node Notify global settings.',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('node_notify_settings_form'),
     'access arguments' => array('administer node notify'),
   );
 
+  $items['node/%node/subscriptions'] = array(
+    'title' => 'Subscriptions',
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'node_notify_node_subscriptions_page',
+    'page arguments' => array(1),
+    'access callback' => 'node_notify_access',
+    'access arguments' => array('administer node subscriptions', 1),
+  );
+  $items['node/%node/subscribe'] = array(
+    'title' => 'Subscriptions',
+    'type' => MENU_CALLBACK,
+    'page callback' => 'node_notify_subscribe_page',
+    'page arguments' => array(1),
+    'access callback' => 'node_notify_access',
+    'access arguments' => array('subscribe to node', 1),
+  );
+  $items['node/%node/unsubscribe'] = array(
+    'title' => 'Subscriptions',
+    'type' => MENU_CALLBACK,
+    'page callback' => 'node_notify_unsubscribe_page',
+    'page arguments' => array(1),
+    'access callback' => 'node_notify_access',
+    'access arguments' => array('subscribe to node', 1),
+  );
+
+  $items['user/%user/subscriptions'] = array(
+    'title' => 'Subscriptions',
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'node_notify_user_subscriptions_page',
+    'page arguments' => array(1),
+    'access callback' => 'user_edit_access',
+    'access arguments' => array(1),
+  );
+
+  $items['node_notify/unsubscribe/%'] = array(
+    'title' => 'Disable comment notifications',
+    'type' => MENU_CALLBACK,
+    'page callback' => 'node_notify_disable_page',
+    'page arguments' => array(2),
+    'access arguments' => array('access content'),
+  );
+
   return $items;
+}
+
+function node_notify_disable_page ($token) {
+  $record = db_select('node_notify_subscription', 's')
+    ->fields('s', array('sid'))
+    ->condition('token', $token)
+    ->execute()
+    ->fetchObject();
+  if ($record) {
+    db_update('node_notify_subscription')
+      ->condition('sid', $record->sid)
+      ->fields(array('enabled' => 0))
+      ->execute();
+    $message = t('Comment notifications were disabled.');
+  }
+  else {
+    $message = t('Sorry, there was a problem unsubscribing from notifications.');
+  }
+  drupal_set_message($message);
+  return $message;
+}
+
+function node_notify_access ($permission, $node) {
+  return user_access($permission) && in_array($node->type, node_notify_enabled_types());
+}
+
+function node_notify_subscribe_page ($node) {
+  global $user;
+  if ($user->uid) {
+    node_notify_subscribe($node->nid, $user->uid);
+    drupal_set_message(t('Subscribed to %title.', array('%title' => $node->title)));
+    drupal_goto('node/'.$node->nid);
+  }
+  else {
+    return drupal_get_form('node_notify_subscribe_form', $node);
+  }
+}
+
+function node_notify_subscribe_form ($form, &$form_state, $node) {
+  $form_state['node_notify']['node'] = $node;
+
+  $form['email'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Recieve comment notifications by email'),
+    '#description' => t('Enter your email address to receive email notifications.'),
+    '#required' => TRUE,
+    '#element_validate' => array('node_notify_validate_email_address'),
+  );
+
+  $form['subscribed'] = array(
+    '#type' => 'submit',
+    '#value' => t('Subscribe'),
+  );
+
+  return $form;
+}
+
+function node_notify_subscribe_form_submit ($form, &$form_state) {
+  $email = $form_state['values']['email'];
+  $node = $form_state['node_notify']['node'];
+  node_notify_subscribe($node->nid, 0, $email);
+  drupal_set_message(t('Subscribed to %title.', array('%title' => $node->title)));
+  drupal_goto('node/'.$node->nid);
+}
+
+function node_notify_unsubscribe_page ($node) {
+  global $user;
+  if ($user->uid > 0) {
+    node_notify_unsubscribe($node->nid, $user->uid);
+    drupal_set_message(t('Unsubscribed from %title.', array('%title' => $node->title)));
+  }
+  drupal_goto('node/'.$node->nid);
+}
+
+function node_notify_node_subscriptions_page ($node) {
+  $header = array(
+    array('data' => t('User'), 'field' => 'name'),
+    array('data' => t('Email'), 'field' => 'email'),
+    array('data' => t('Date'), 'field' => 'subscribed_on', 'sort' => 'desc'),
+    '',
+  );
+
+  $query = db_select('node_notify_subscription', 's');
+  $query->leftJoin('users', 'u', '(s.uid = u.uid)');
+  $query->fields('s', array('sid', 'email', 'subscribed_on', 'uid', 'enabled'));
+  $query->fields('u', array('name'));
+  $query->condition('nid', $node->nid);
+  // $query->condition('enabled', 1);
+
+  $query
+    ->extend('PagerDefault')->limit(20)
+    ->extend('TableSort')->orderByHeader($header);
+
+  $rows = array();
+  foreach ($query->execute() as $record) {
+    $url = 'node/'.$node->nid.'/subscriptions/' . $record->sid . '/';
+    $rows[] = array(
+      $record->uid ? l($record->name, 'user/' . $record->uid) : NULL,
+      $record->email, format_date($record->subscribed_on),
+      $record->enabled ? l(t('Disable'), $url . 'disable') : l(t('Enable'), $url . 'enable'),
+    );
+  }
+
+  $build = array(
+    '#theme' => 'table',
+    '#header' => $header,
+    '#rows' => $rows,
+    '#empty' => t('No subscriptions yet.'),
+    // '#attributes' => array(),
+  );
+
+  return render($build) . theme('pager');
+}
+
+function node_notify_user_subscriptions_page ($user) {
+  $header = array(
+    array('data' => t('Title'), 'field' => 'title', 'sort' => 'asc'),
+    array('data' => t('Date'), 'field' => 'subscribed_on', 'sort' => 'desc'),
+    '',
+  );
+
+  $query = db_select('node_notify_subscription', 's');
+  $query->leftJoin('node', 'n', '(s.nid = n.nid)');
+  $query->fields('s', array('subscribed_on', 'nid', 'uid'));
+  $query->fields('n', array('title'));
+  $query->condition('s.uid', $user->uid);
+
+  $query
+    ->extend('PagerDefault')->limit(20)
+    ->extend('TableSort')->orderByHeader($header);
+
+  $rows = array();
+  foreach ($query->execute() as $record) {
+    $rows[] = array(
+      $record->title, format_date($record->subscribed_on), ''
+    );
+  }
+
+  $build = array(
+    '#theme' => 'table',
+    '#header' => $header,
+    '#rows' => $rows,
+    '#empty' => t('No subscriptions yet.'),
+    // '#attributes' => array(),
+  );
+
+  return render($build) . theme('pager');
+}
+
+
+/**
+ * Node Notify admin settings form.
+ */
+function node_notify_settings_form ($form, &$form_state) {
+  $types = array();
+  foreach (node_type_get_types() as $type) {
+    $types[$type->type] = $type->name;
+  }
+
+  $form['node_notify_enabled_types'] = array(
+    '#title' => t('Subscribable content types'),
+    '#type' => 'checkboxes',
+    '#options' => $types,
+    '#default_value' => variable_get('node_notify_enabled_types', array()),
+  );
+
+  $form['node_notify_cron'] = array(
+    '#title' => t('Remove expired subscriptions'),
+    '#description' => t('Remove disabled and expired subscriptions when cron is run.'),
+    '#type' => 'checkbox',
+    '#default_value' => variable_get('node_notify_cron', FALSE),
+  );
+
+  $form['node_notify_expires'] = array(
+    '#title' => t('Expiration date'),
+    '#description' => t('Subscription is considered expired if it is disabled and subscription or modification date is earlier than this setting. Expiration date can be <a href="http://www.php.net/manual/en/datetime.formats.relative.php">relative</a>. Current value would produce <span id="node-notify-expires-test">%time</span>.', array(
+      '%time' => format_date(strtotime(variable_get('node_notify_expires', '-1 month'))),
+    )),
+    '#type' => 'textfield',
+    '#default_value' => variable_get('node_notify_expires', '-1 month'),
+  );
+
+  $token_types = array('comment', 'site', 'random', 'subscriber', 'subscription');
+  $form['node_notify_template'] = array(
+    '#title' => t('Notification template'),
+    '#type' => 'fieldset',
+    'node_notify_template_subject' => array(
+      '#title' => t('Subject'),
+      '#type' => 'textfield',
+      '#default_value' => variable_get('node_notify_template_subject', NODE_NOTIFY_DEFAULT_NOTIFICATION_SUBJECT),
+      '#return_value' => 1,
+      '#token_types' => $token_types,
+      '#element_validate' => array('token_element_validate'),
+    ),
+    'node_notify_template_body' => array(
+      '#title' => t('Body'),
+      '#type' => 'textarea',
+      '#default_value' => variable_get('node_notify_template_body', NODE_NOTIFY_DEFAULT_NOTIFICATION_BODY),
+      '#return_value' => 1,
+      '#token_types' => $token_types,
+      '#element_validate' => array('token_element_validate'),
+    ),
+    'token_help' => array(
+      '#theme' => 'token_tree',
+      '#token_types' => $token_types,
+      '#global_types' => FALSE,
+    ),
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * Implements hook_form_alter()
+ */
+function node_notify_form_alter (&$form, &$form_state, $form_id) {
+  $enabled = FALSE;
+
+  foreach (node_notify_enabled_types() as $type) {
+    if ($type.'_node_form' == $form_id) {
+      $enabled = TRUE;
+      break;
+    }
+  }
+  if (!$enabled) return;
+
+  $node = $form['#node'];
+  $node->node_notify_subscribe = isset($node->node_notify_subscribe)
+    ? $node->node_notify_subscribe : NULL;
+
+  global $user;
+
+  // Editing old node
+  if (isset($node->nid)) {
+    if (!user_is_anonymous() && $node->uid == $user->uid && user_access('subscribe to node')) {
+      $form['node_notify_subscribe'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Recieve comment notifications by email'),
+        '#default_value' => $node->node_notify_subscribe,
+      );
+    }
+    else if (user_access('administer node subscriptions')) {
+      $form['node_notify_subscribe'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Author recieves comment notifications by email'),
+        '#default_value' => $node->node_notify_subscribe,
+      );
+    }
+  }
+  // Creating new node
+  else if (user_access('subscribe to node')) {
+    if (user_is_anonymous()) {
+      $form['node_notify_subscribe'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Recieve comment notifications by email'),
+        '#description' => t('Enter your email address to receive email notifications.'),
+        '#element_validate' => array('node_notify_validate_email_address'),
+        '#default_value' => $node->node_notify_subscribe,
+      );
+    }
+    else {
+      $form['node_notify_subscribe'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Recieve comment notifications by email'),
+        '#default_value' => $node->node_notify_subscribe,
+      );
+    }
+  }
+}
+
+function node_notify_validate_email_address ($element, &$form_state, $form) {
+  if (!empty($element['#value']) && !valid_email_address($element['#value'])) {
+    form_error($element, t('You must provide valid email address to recieve comment notifications.'));
+  }
+}
+
+function node_notify_enabled_types () {
+  $enabled_types = variable_get('node_notify_enabled_types', array());
+  return array_keys(array_flip(array_filter($enabled_types)));
+}
+
+/**
+ * Implements hook_field_extra_fields().
+ */
+function node_notify_field_extra_fields () {
+  $extra = array();
+  foreach (node_notify_enabled_types() as $type) {
+    $extra['node'][$type]['form']['node_notify_subscribe'] = array(
+      'label' => t('Comment notifications'),
+      'description' => t('Receive notifications about comments'),
+      'weight' => 4,
+    );
+  }
+  return $extra;
+}
+
+/**
+ * Implement hook_node_load().
+ */
+function node_notify_node_load ($nodes, $types) {
+  global $user;
+  if ($user->uid > 0 && user_access('subscribe to node')) {
+    $result = db_select('node_notify_subscription', 's')
+      ->fields('s')
+      ->condition('nid', array_keys($nodes))
+      ->condition('uid', $user->uid)
+      ->condition('uid', 0, '>')
+      ->execute();
+    foreach ($result as $rec) {
+      $nodes[$rec->nid]->node_notify_subscribe = $rec->enabled;
+    }
+  }
+}
+
+/**
+ * Implement hook_node_insert().
+ */
+function node_notify_node_insert ($node) {
+  if (!empty($node->node_notify_subscribe)) {
+    node_notify_subscribe($node->nid, $node->uid, $node->node_notify_subscribe);
+  }
+}
+
+/**
+ * Implement hook_node_update().
+ */
+function node_notify_node_update ($node) {
+  global $user;
+  $account = user_load($node->uid);
+  // to edit subscription one must be author of a node and have 'subscribe to
+  // node' permission or permission to manage subscriptions
+  if ($account->uid > 0 && (($user->uid == $account->uid && user_access('subscribe to node', $account)) || user_access('administer node subscriptions'))) {
+    if (!empty($node->node_notify_subscribe)) {
+      if ($node->node_notify_subscribe) {
+        node_notify_subscribe($node->nid, $node->uid);
+      }
+      else {
+        node_notify_unsubscribe($node->nid, $node->uid);
+      }
+    }
+  }
+}
+
+/**
+ * Implement hook_node_delete().
+ */
+function node_notify_node_delete ($node) {
+  db_query(
+    'DELETE FROM {node_notify_notification}
+      WHERE sid IN (SELECT sid FROM {node_notify_subscription} WHERE nid = :nid)',
+    array(':nid' => $node->nid)
+  );
+  db_delete('node_notify_subscription')
+    ->condition('nid', $node->nid)
+    ->execute();
+}
+
+/**
+ * Implements hook_node_view().
+ */
+function node_notify_node_view ($node, $view_mode, $langcode) {
+  if (user_access('subscribe to node')
+  && in_array($node->type, node_notify_enabled_types())
+  && $view_mode == 'full')
+  {
+    global $user;
+    if ($user->uid > 0 && node_notify_is_subscribed($node->nid, $user->uid)) {
+      $node->content['links']['node']['#links']['unsubscribe'] = array(
+        'title' => t('Unsubscribe'),
+        'href' => 'node/' . $node->nid . '/unsubscribe',
+      );
+    }
+    else {
+      $node->content['links']['node']['#links']['subscribe'] = array(
+        'title' => t('Subscribe'),
+        'href' => 'node/' . $node->nid . '/subscribe',
+      );
+    }
+  }
+}
+
+/**
+ * Implements hook_cron().
+ */
+function node_notify_cron () {
+  if (!variable_get('node_notify_cron', FALSE))
+    return;
+
+  $expiration_time = variable_get('node_notify_expires', '-1 month');
+  $expire = strtotime($expiration_time);
+
+  db_delete('node_notify_subscription')
+    ->condition('subscribed_on', $expire, '<=')
+    ->condition('enabled', FALSE)
+    ->execute();
+
+  db_query(
+    'DELETE FROM {node_notify_notification}
+      WHERE sid NOT IN (SELECT sid FROM {node_notify_subscription})'
+  );
+}
+
+function node_notify_subscribe ($nid, $uid, $email = '', $enabled = TRUE) {
+  if ($uid > 0) $email = ''; // make sure email is empty for registered user
+  $sid = db_select('node_notify_subscription', 's')
+    ->fields('s', array('sid'))
+    ->condition('nid', $nid)
+    ->condition('uid', $uid)
+    ->condition('email', $email)
+    ->execute()
+    ->fetchColumn();
+  if ($sid) {
+    db_update('node_notify_subscription')
+      ->condition('sid', $sid)
+      ->fields(array(
+        'enabled' => (int)$enabled,
+        'subscribed_on' => time(),
+      ))->execute();
+  }
+  else {
+    $seed = $nid . $uid . $email . mt_rand();
+    $fields = array(
+      'nid' => $nid,
+      'uid' => (int)$uid,
+      'email' => $email,
+      'token' => NULL,
+      'enabled' => (int)$enabled,
+      'subscribed_on' => time(),
+    );
+    while (1) {
+      try {
+        $seed = $nid . $uid . $email . mt_rand();
+        $fields['token'] = drupal_get_token($seed);
+        db_insert('node_notify_subscription')
+          ->fields($fields)
+          ->execute();
+        break;
+      } catch (Exception $e) {
+      }
+    }
+  }
+}
+
+function node_notify_unsubscribe ($nid, $uid, $email = '') {
+  node_notify_subscribe($nid, $uid, $email, $enabled = FALSE);
+}
+
+function node_notify_is_subscribed ($nid, $uid, $email = '') {
+  $query = db_select('node_notify_subscription', 's')
+    ->fields('s', array('enabled'))
+    ->condition('nid', $nid);
+  if ($uid == 0 && $email) {
+    $query->condition('email', $email);
+    $query->condition('uid', 0);
+  }
+  else {
+    $query->condition('uid', $uid);
+  }
+  if ($result = $query->execute()) {
+    return (boolean) $result->fetchColumn();
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_mail().
+ */
+function node_notify_mail ($key, &$message, $params) {
+  $message['subject'] = $params['subject'];
+  $message['body'][] = $params['body'];
+  watchdog('node_notify', print_r($params, 1), array(), WATCHDOG_NOTICE);
+}
+
+
+function _node_notify_processed_by_comment_notify ($comment, $uid, $email) {
+  if (module_exists('comment_notify')) {
+    // Is this subscriber subscribed to comment notify for all comments on
+    // this node?
+    $exists = db_query(
+      'SELECT 1
+         FROM {comment} c
+   INNER JOIN {comment_notify} cn ON c.cid = cn.cid
+    LEFT JOIN {users} u ON c.uid = u.uid
+        WHERE c.nid = :nid
+          AND c.status = :status
+          AND cn.notify = :notify
+          AND ((u.uid = 0 AND c.mail = :mail) OR u.uid = :uid)',
+      array(
+        ':nid' => $comment->nid,
+        ':status' => COMMENT_PUBLISHED,
+        ':notify' => COMMENT_NOTIFY_NODE,
+        ':uid' => $uid,
+        ':mail' => $email,
+      ))
+      ->fetchColumn();
+    if ($exists) {
+      return TRUE;
+    }
+
+    if ($uid > 0) {
+      // Is subscriber subscribed to follow-up comments on all his content?
+      $exists = db_query(
+        'SELECT 1
+           FROM {comment_notify_user_settings} cnu
+     INNER JOIN {node} n ON cnu.uid = n.uid
+          WHERE cnu.uid = :uid
+            AND cnu.node_notify = 1
+            AND n.nid = :nid',
+        array(
+          ':uid' => $uid,
+          ':nid' => $comment->nid,
+        ))
+        ->fetchColumn();
+      if ($exists) {
+        return TRUE;
+      }
+    }
+
+    // Is this subscriber subscribed to ancestor comment?
+    $result = db_query(
+      'SELECT c.thread
+         FROM {comment} c
+   INNER JOIN {comment_notify} cn ON c.cid = cn.cid
+    LEFT JOIN {users} u ON c.uid = u.uid
+        WHERE c.nid = :nid
+          AND c.cid <> :cid
+          AND c.status = :status
+          AND cn.notify = :notify
+          AND ((u.uid = 0 AND c.mail = :mail) OR u.uid = :uid)',
+      array(
+        ':cid' => $comment->cid,
+        ':nid' => $comment->nid,
+        ':status' => COMMENT_PUBLISHED,
+        ':notify' => COMMENT_NOTIFY_COMMENT,
+        ':uid' => $uid,
+        ':mail' => $email,
+      ));
+    foreach ($result as $record) {
+      $len = drupal_strlen($record->thread) - 1;
+      $thread = drupal_substr($comment->thread, 0, $len);
+      $record->thread = drupal_substr($record->thread, 0, $len);
+      if ($thread == $record->thread) {
+        return TRUE;
+      }
+    }
+  }
+
+  return FALSE;
+}
+
+function node_notify_send_notification ($subscription, $notification, $comment) {
+  $notified = 0;
+  if (_node_notify_processed_by_comment_notify($comment, $subscription->uid, $subscription->email)) {
+    $notified = NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY;
+  }
+  else {
+    // Skip notification if subscriber == commenter
+    if ($subscription->uid != $comment->uid
+    || ($subscription->email != $comment->mail && 0 == $subscription->uid
+    && 0 == $comment->uid))
+    {
+      $subscriber = $subscription->uid ? user_load($subscription->uid) : drupal_anonymous_user();
+      $node = node_load($comment->nid);
+
+      if (!node_access('view', $node, $subscriber)) {
+        // Aren't there any hooks for permissions' change so that we could
+        // remove invalidated subscriptions?
+        node_notify_unsubscribe($node->nid, $subscriber->uid, $subscription->email);
+        return ;
+      }
+
+      $subject = variable_get('node_notify_template_subject', NODE_NOTIFY_DEFAULT_NOTIFICATION_SUBJECT);
+      $body = variable_get('node_notify_template_body', NODE_NOTIFY_DEFAULT_NOTIFICATION_BODY);
+
+      $mail = $subscriber->uid ? $subscriber->mail : $subscription->email;
+      $language = user_preferred_language($subscriber);
+
+      drupal_mail('node_notify', 'comment_notification', $mail, $language, array(
+        'subject' => token_replace($subject, array(
+          'comment' => $comment,
+          'subscriber' => $subscriber,
+          'subscription' => $subscription,
+        )),
+        'body' => token_replace($body, array(
+          'comment' => $comment,
+          'subscriber' => $subscriber,
+          'subscription' => $subscription,
+        )),
+      ));
+
+      $notified = NODE_NOTIFY_SENT;
+    }
+    else {
+      $notified = NODE_NOTIFY_SKIPPED;
+    }
+  }
+
+  db_update('node_notify_notification')
+    ->condition('sid', $notification->sid)
+    ->condition('cid', $notification->cid)
+    ->fields(array('notified' => $notified))
+    ->execute();
+}
+
+function node_notify_send_notifications ($comment) {
+  if (COMMENT_PUBLISHED == $comment->status) {
+    $types = node_notify_enabled_types();
+    if (!count($types)) return ;
+
+    $query = db_select('node_notify_subscription', 's')
+      ->fields('s')
+      ->condition('s.nid', $comment->nid)
+      ->condition('enabled', 1);
+
+    // $query->leftJoin('user', 'u', '(s.uid = u.uid)');
+    // $query->addField('u', 'mail', 'user_mail');
+
+    $query->innerJoin('node', 'n', '(s.nid = n.nid)');
+    $result = $query
+      ->fields('n', array('type'))
+      ->condition('n.type', $types, 'IN')
+      ->execute();
+
+    foreach ($result as $subscription) {
+      $notification = db_select('node_notify_notification', 'n')
+        ->fields('n')
+        ->condition('sid', $subscription->sid)
+        ->condition('cid', $comment->cid)
+        ->execute()
+        ->fetchObject();
+      if (!$notification) {
+        $notification = array(
+          'sid' => $subscription->sid,
+          'cid' => $comment->cid,
+          'notified' => NODE_NOTIFY_PENDING,
+        );
+        db_insert('node_notify_notification')
+          ->fields($notification)
+          ->execute();
+        $notification = (object) $notification;
+      }
+      if (NODE_NOTIFY_PENDING == $notification->notified) {
+        node_notify_send_notification($subscription, $notification, $comment);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_comment_insert().
+ */
+function node_notify_comment_insert ($comment) {
+  node_notify_send_notifications($comment);
+}
+
+/**
+ * Implements hook_comment_update().
+ */
+function node_notify_comment_update ($comment) {
+  node_notify_send_notifications($comment);
+}
+
+/**
+ * Implements hook_comment_delete().
+ */
+function node_notify_comment_delete ($comment) {
+  db_delete('node_notify_notification')
+    ->condition('cid', $comment->cid)
+    ->execute();
+}
+
+function node_notify_get_notification ($cid, $nid, $uid, $email = '') {
+  $query = db_select('node_notify_notification', 'n')
+    ->fields('n', array('sid', 'cid', 'notified'))
+    ->condition('cid', $cid);
+  $query->innerJoin(
+    'node_notify_subscription', 's',
+    '(s.sid = n.sid AND s.nid = :nid AND s.uid = :uid AND s.email = :email)',
+    array(':nid' => $nid, ':uid' => $uid, ':email' => $email)
+  );
+  return $query->execute()->fetchObject();
 }

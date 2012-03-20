@@ -10,3 +10,5 @@ dependencies[] = token
 
 files[] = node_notify.install
 files[] = node_notify.module
+files[] = node_notify.tokens.inc
+files[] = node_notify.test
