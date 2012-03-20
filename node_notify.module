@@ -95,7 +95,7 @@ function node_notify_menu () {
   );
 
   $items['node_notify/unsubscribe/%'] = array(
-    'title' => 'Disable comment notifications',
+    'title' => 'Unsubscribe',
     'type' => MENU_CALLBACK,
     'page callback' => 'node_notify_disable_page',
     'page arguments' => array(2),
@@ -573,9 +573,7 @@ function node_notify_is_subscribed ($nid, $uid, $email = '') {
 function node_notify_mail ($key, &$message, $params) {
   $message['subject'] = $params['subject'];
   $message['body'][] = $params['body'];
-  watchdog('node_notify', print_r($params, 1), array(), WATCHDOG_NOTICE);
 }
-
 
 function _node_notify_processed_by_comment_notify ($comment, $uid, $email) {
   if (module_exists('comment_notify')) {
