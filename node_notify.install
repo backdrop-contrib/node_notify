@@ -58,13 +58,6 @@ function node_notify_schema () {
         'length' => 150,
         'default' => '',
       ),
-      // 'type' => array(
-      //   'description' => 'Subscription type.',
-      //   'type' => 'int',
-      //   'size' => 'small',
-      //   'not null' => TRUE,
-      //   'default' => 0,
-      // ),
       'enabled' => array(
         'description' => 'Is subscription active?',
         'type' => 'int',
@@ -138,22 +131,4 @@ function node_notify_schema () {
   );
 
   return $schema;
-}
-
-function node_notify_update_7001 () {
-  $schema = node_notify_schema();
-  foreach ($schema as $table => $def) {
-    db_create_table($table, $def);
-  }
-  return 'Created schema tables for Node Notify';
-}
-
-function node_notify_update_7002 () {
-  db_add_field('node_notify_subscription', 'subscribed_on', array(
-    'description' => 'Timestamp of subscription.',
-    'type' => 'int',
-    'unsigned' => TRUE,
-    'not null' => TRUE,
-  ));
-  return 'Added timestamp field "subscribed" to table {node_notify_subscription}';
 }
