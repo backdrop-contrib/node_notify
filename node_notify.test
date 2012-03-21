@@ -177,7 +177,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
       'Checkbox checked for author.'
     );
     $this->assertText(
-      t('Recieve comment notifications by email'),
+      t('Receive comment notifications by email'),
       'Different label if editing is done by the author.'
     );
     $this->drupalLogout();
@@ -189,7 +189,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
       'Checkbox checked for admin.'
     );
     $this->assertText(
-      t('Author recieves comment notifications by email'),
+      t('Author receives comment notifications by email'),
       'Different label if editing is done not by the author.'
     );
 
@@ -222,10 +222,8 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->drupalGet("node/$nid");
     $data = $this->postComment($this->node, $this->randomName(), $this->randomName());
 
-    $this->assertMail('to', $email, "Notification mail sent to anonymous subscriber.");
-
     $note = node_notify_get_notification($data['id'], $nid, 0, $email);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, 'Notification marked as sent.');
+    $this->assertTrue($note->notified == NODE_NOTIFY_DENIED, 'Notification marked as denied.');
 
     $note = node_notify_get_notification($data['id'], $nid, $this->privileged->uid);
     $this->assertTrue($note->notified == NODE_NOTIFY_SKIPPED, 'Notification skipped -- subscriber is commenter.');
@@ -237,6 +235,14 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $data = $this->postComment($this->node, $this->randomName(), $this->randomName(), array('mail' => $email, 'name' => $this->randomName()));
     $notification = node_notify_get_notification($data['id'], $nid, 0, $email);
     $this->assertTrue($notification->notified == NODE_NOTIFY_SKIPPED, 'Notification skipped -- subscribe is commenter (anonymous).');
+
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('subscribe to node', 'access content'));
+    $this->drupalLogin($this->privileged);
+    $this->drupalGet("node/$nid");
+    $data = $this->postComment($this->node, $this->randomName(), $this->randomName());
+    $note = node_notify_get_notification($data['id'], $nid, 0, $email);
+    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, 'Notification marked as sent.');
+    $this->assertMail('to', $email, "Notification mail sent to anonymous subscriber.");
   }
 
   protected function testNodeNotifyCommentNotifyIntegrationWeb () {

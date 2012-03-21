@@ -881,7 +881,7 @@ function node_notify_send_notification ($subscription, $notification, $comment) 
       $node = node_load($comment->nid);
 
       // Last check before sending
-      if ($subscriber->status && node_access('view', $node, $subscriber) && user_access('subscribe to node', $subscriber)) {
+      if (node_access('view', $node, $subscriber) && user_access('subscribe to node', $subscriber)) {
 
         $subject = variable_get('node_notify_template_subject', NODE_NOTIFY_DEFAULT_NOTIFICATION_SUBJECT);
         $body = variable_get('node_notify_template_body', NODE_NOTIFY_DEFAULT_NOTIFICATION_BODY);
