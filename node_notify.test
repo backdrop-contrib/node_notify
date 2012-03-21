@@ -239,9 +239,6 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->assertTrue($notification->notified == NODE_NOTIFY_SKIPPED, 'Notification skipped -- subscribe is commenter (anonymous).');
   }
 
-  protected function testNodeNotifyCommentNotifyIntegrationAPI () {
-  }
-
   protected function testNodeNotifyCommentNotifyIntegrationWeb () {
     $type = $this->type->type;
     $nid = $this->node->nid;
