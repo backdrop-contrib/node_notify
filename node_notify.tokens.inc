@@ -1,6 +1,12 @@
 <?php
 
 /**
+ * @file
+ *
+ * Tokens for notifications.
+ */
+
+/**
  * Implements hook_token_info().
  */
 function node_notify_token_info () {
