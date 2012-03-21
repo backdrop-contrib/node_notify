@@ -10,6 +10,7 @@ define('NODE_NOTIFY_PENDING', 0);
 define('NODE_NOTIFY_SENT', 1);
 define('NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY', 2);
 define('NODE_NOTIFY_SKIPPED', 3);
+define('NODE_NOTIFY_DENIED', 4);
 
 define('NODE_NOTIFY_DEFAULT_NOTIFICATION_SUBJECT', 'New comment on "[comment:node:title]" by [comment:author]');
 define('NODE_NOTIFY_DEFAULT_NOTIFICATION_BODY', 'Hi [subscriber:name],
@@ -867,46 +868,45 @@ function _node_notify_processed_by_comment_notify ($comment, $uid, $email) {
  *   Comment to check against.
  */
 function node_notify_send_notification ($subscription, $notification, $comment) {
-  $notified = 0;
+  $notified = NODE_NOTIFY_PENDING;
+
   if (_node_notify_processed_by_comment_notify($comment, $subscription->uid, $subscription->email)) {
     $notified = NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY;
   }
   else {
     // Skip notification if subscriber == commenter
-    if ($subscription->uid != $comment->uid
-    || ($subscription->email != $comment->mail && 0 == $subscription->uid
-    && 0 == $comment->uid))
-    {
+    if ($subscription->uid != $comment->uid || ($subscription->email != $comment->mail && 0 == $subscription->uid && 0 == $comment->uid)) {
+
       $subscriber = $subscription->uid ? user_load($subscription->uid) : drupal_anonymous_user();
       $node = node_load($comment->nid);
 
-      if (!node_access('view', $node, $subscriber)) {
-        // Aren't there any hooks for permissions' change so that we could
-        // remove invalidated subscriptions?
-        node_notify_unsubscribe($node->nid, $subscriber->uid, $subscription->email);
-        return ;
+      // Last check before sending
+      if ($subscriber->status && node_access('view', $node, $subscriber) && user_access('subscribe to node', $subscriber)) {
+
+        $subject = variable_get('node_notify_template_subject', NODE_NOTIFY_DEFAULT_NOTIFICATION_SUBJECT);
+        $body = variable_get('node_notify_template_body', NODE_NOTIFY_DEFAULT_NOTIFICATION_BODY);
+
+        $mail = $subscriber->uid ? $subscriber->mail : $subscription->email;
+        $language = user_preferred_language($subscriber);
+
+        drupal_mail('node_notify', 'comment_notification', $mail, $language, array(
+          'subject' => token_replace($subject, array(
+            'comment' => $comment,
+            'subscriber' => $subscriber,
+            'subscription' => $subscription,
+          )),
+          'body' => token_replace($body, array(
+            'comment' => $comment,
+            'subscriber' => $subscriber,
+            'subscription' => $subscription,
+          )),
+        ));
+
+        $notified = NODE_NOTIFY_SENT;
       }
-
-      $subject = variable_get('node_notify_template_subject', NODE_NOTIFY_DEFAULT_NOTIFICATION_SUBJECT);
-      $body = variable_get('node_notify_template_body', NODE_NOTIFY_DEFAULT_NOTIFICATION_BODY);
-
-      $mail = $subscriber->uid ? $subscriber->mail : $subscription->email;
-      $language = user_preferred_language($subscriber);
-
-      drupal_mail('node_notify', 'comment_notification', $mail, $language, array(
-        'subject' => token_replace($subject, array(
-          'comment' => $comment,
-          'subscriber' => $subscriber,
-          'subscription' => $subscription,
-        )),
-        'body' => token_replace($body, array(
-          'comment' => $comment,
-          'subscriber' => $subscriber,
-          'subscription' => $subscription,
-        )),
-      ));
-
-      $notified = NODE_NOTIFY_SENT;
+      else {
+        $notified = NODE_NOTIFY_DENIED;
+      }
     }
     else {
       $notified = NODE_NOTIFY_SKIPPED;
