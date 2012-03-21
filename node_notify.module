@@ -1,5 +1,11 @@
 <?php
 
+/**
+ * @file
+ *
+ * Node Notify provides node comment notifications.
+ */
+
 define('NODE_NOTIFY_PENDING', 0);
 define('NODE_NOTIFY_SENT', 1);
 define('NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY', 2);
@@ -68,6 +74,22 @@ function node_notify_menu () {
     'access callback' => 'node_notify_access',
     'access arguments' => array('administer node subscriptions', 1),
   );
+  $items['node/%node/subscriptions/%/enable'] = array(
+    'title' => 'Enable subscription',
+    'type' => MENU_CALLBACK,
+    'page callback' => 'node_notify_node_enable_subscription_page',
+    'page arguments' => array(1, 3),
+    'access callback' => 'node_notify_access',
+    'access arguments' => array('administer node subscriptions', 1),
+  );
+  $items['node/%node/subscriptions/%/disable'] = array(
+    'title' => 'Disable subscription',
+    'type' => MENU_CALLBACK,
+    'page callback' => 'node_notify_node_enable_subscription_page',
+    'page arguments' => array(1, 3, FALSE),
+    'access callback' => 'node_notify_access',
+    'access arguments' => array('administer node subscriptions', 1),
+  );
   $items['node/%node/subscribe'] = array(
     'title' => 'Subscriptions',
     'type' => MENU_CALLBACK,
@@ -90,7 +112,23 @@ function node_notify_menu () {
     'type' => MENU_LOCAL_TASK,
     'page callback' => 'node_notify_user_subscriptions_page',
     'page arguments' => array(1),
-    'access callback' => 'user_edit_access',
+    'access callback' => 'node_notify_user_access',
+    'access arguments' => array(1),
+  );
+  $items['user/%user/subscriptions/%/enable'] = array(
+    'title' => 'Enable subscriptions',
+    'type' => MENU_CALLBACK,
+    'page callback' => 'node_notify_user_enable_subscription_page',
+    'page arguments' => array(1, 3),
+    'access callback' => 'node_notify_user_access',
+    'access arguments' => array(1),
+  );
+  $items['user/%user/subscriptions/%/disable'] = array(
+    'title' => 'Disable subscriptions',
+    'type' => MENU_CALLBACK,
+    'page callback' => 'node_notify_user_enable_subscription_page',
+    'page arguments' => array(1, 3, FALSE),
+    'access callback' => 'node_notify_user_access',
     'access arguments' => array(1),
   );
 
@@ -105,6 +143,9 @@ function node_notify_menu () {
   return $items;
 }
 
+/**
+ * Page callback to disable subscriptions by a given token.
+ */
 function node_notify_disable_page ($token) {
   $record = db_select('node_notify_subscription', 's')
     ->fields('s', array('sid'))
@@ -125,10 +166,31 @@ function node_notify_disable_page ($token) {
   return $message;
 }
 
+/**
+ * Node access callback.
+ */
 function node_notify_access ($permission, $node) {
   return user_access($permission) && in_array($node->type, node_notify_enabled_types());
 }
 
+/**
+ * User access callback.
+ */
+function node_notify_user_access ($account) {
+  global $user;
+  if ($user->uid == $account->uid) {
+    return user_access('subscribe to node');
+  }
+  else {
+    return user_access('user_edit_access', $user)
+      && user_access('administer node subscriptions');
+  }
+}
+
+/**
+ * Page callback to subscribe current user to a given node. Displays form for
+ * an anonymous user.
+ */
 function node_notify_subscribe_page ($node) {
   global $user;
   if ($user->uid) {
@@ -141,6 +203,9 @@ function node_notify_subscribe_page ($node) {
   }
 }
 
+/**
+ * Subscription form displayed for anonymous user.
+ */
 function node_notify_subscribe_form ($form, &$form_state, $node) {
   $form_state['node_notify']['node'] = $node;
 
@@ -160,6 +225,11 @@ function node_notify_subscribe_form ($form, &$form_state, $node) {
   return $form;
 }
 
+/**
+ * Submit handler.
+ *
+ * Subscribes given email to a given node.
+ */
 function node_notify_subscribe_form_submit ($form, &$form_state) {
   $email = $form_state['values']['email'];
   $node = $form_state['node_notify']['node'];
@@ -168,6 +238,9 @@ function node_notify_subscribe_form_submit ($form, &$form_state) {
   drupal_goto('node/'.$node->nid);
 }
 
+/**
+ * Page callback to unsubscribe current user from a node.
+ */
 function node_notify_unsubscribe_page ($node) {
   global $user;
   if ($user->uid > 0) {
@@ -177,6 +250,9 @@ function node_notify_unsubscribe_page ($node) {
   drupal_goto('node/'.$node->nid);
 }
 
+/**
+ * Page to display subscriptions to a given node.
+ */
 function node_notify_node_subscriptions_page ($node) {
   $header = array(
     array('data' => t('User'), 'field' => 'name'),
@@ -198,11 +274,13 @@ function node_notify_node_subscriptions_page ($node) {
 
   $rows = array();
   foreach ($query->execute() as $record) {
-    $url = 'node/'.$node->nid.'/subscriptions/' . $record->sid . '/';
+    $url = 'node/'.$node->nid.'/subscriptions/' . $record->sid;
     $rows[] = array(
       $record->uid ? l($record->name, 'user/' . $record->uid) : NULL,
       $record->email, format_date($record->subscribed_on),
-      $record->enabled ? l(t('Disable'), $url . 'disable') : l(t('Enable'), $url . 'enable'),
+      $record->enabled
+      ? l(t('Disable'), $url . '/disable', array('query' => drupal_get_destination()))
+      : l(t('Enable'), $url . '/enable', array('query' => drupal_get_destination())),
     );
   }
 
@@ -217,6 +295,21 @@ function node_notify_node_subscriptions_page ($node) {
   return render($build) . theme('pager');
 }
 
+/**
+ * Page callback to enable or disable subscription by $sid.
+ */
+function node_notify_node_enable_subscription_page ($node, $sid, $enable = TRUE) {
+  db_update('node_notify_subscription')
+    ->condition('sid', $sid)
+    ->fields(array('enabled' => (int)$enable))
+    ->execute();
+
+  drupal_goto(drupal_get_destination());
+}
+
+/**
+ * Page to display user's subscriptions.
+ */
 function node_notify_user_subscriptions_page ($user) {
   $header = array(
     array('data' => t('Title'), 'field' => 'title', 'sort' => 'asc'),
@@ -226,7 +319,7 @@ function node_notify_user_subscriptions_page ($user) {
 
   $query = db_select('node_notify_subscription', 's');
   $query->leftJoin('node', 'n', '(s.nid = n.nid)');
-  $query->fields('s', array('subscribed_on', 'nid', 'uid'));
+  $query->fields('s', array('sid', 'subscribed_on', 'nid', 'uid', 'enabled'));
   $query->fields('n', array('title'));
   $query->condition('s.uid', $user->uid);
 
@@ -236,8 +329,13 @@ function node_notify_user_subscriptions_page ($user) {
 
   $rows = array();
   foreach ($query->execute() as $record) {
+    $url = 'user/'.$user->uid.'/subscriptions/'.$record->sid;
     $rows[] = array(
-      $record->title, format_date($record->subscribed_on), ''
+      l($record->title, 'node/'.$record->nid),
+      format_date($record->subscribed_on),
+      $record->enabled
+      ? l(t('Disable'), $url . '/disable', array('query' => drupal_get_destination()))
+      : l(t('Enable'), $url . '/enable', array('query' => drupal_get_destination())),
     );
   }
 
@@ -252,6 +350,19 @@ function node_notify_user_subscriptions_page ($user) {
   return render($build) . theme('pager');
 }
 
+/**
+ * Page callback to disable or enable subscriptions by $sid for a given
+ * $account.
+ */
+function node_notify_user_enable_subscription_page ($account, $sid, $enable = TRUE) {
+  db_update('node_notify_subscription')
+    ->condition('sid', $sid)
+    ->condition('uid', $account->uid)
+    ->fields(array('enabled' => (int)$enable))
+    ->execute();
+
+  drupal_goto(drupal_get_destination());
+}
 
 /**
  * Node Notify admin settings form.
@@ -316,7 +427,10 @@ function node_notify_settings_form ($form, &$form_state) {
 }
 
 /**
- * Implements hook_form_alter()
+ * Implements hook_form_alter().
+ *
+ * Creates subscription checkbox for registered users or textfield for
+ * anonymous users on node form.
  */
 function node_notify_form_alter (&$form, &$form_state, $form_id) {
   $enabled = FALSE;
@@ -373,12 +487,21 @@ function node_notify_form_alter (&$form, &$form_state, $form_id) {
   }
 }
 
+/**
+ * Element validation callback to check for valid email address.
+ */
 function node_notify_validate_email_address ($element, &$form_state, $form) {
   if (!empty($element['#value']) && !valid_email_address($element['#value'])) {
     form_error($element, t('You must provide valid email address to recieve comment notifications.'));
   }
 }
 
+/**
+ * Return array of enabled types.
+ *
+ * @return
+ *   Array of enabled types' machine names.
+ */
 function node_notify_enabled_types () {
   $enabled_types = variable_get('node_notify_enabled_types', array());
   return array_keys(array_flip(array_filter($enabled_types)));
@@ -485,6 +608,29 @@ function node_notify_node_view ($node, $view_mode, $langcode) {
 }
 
 /**
+ * Implements hook_comment_insert().
+ */
+function node_notify_comment_insert ($comment) {
+  node_notify_send_notifications($comment);
+}
+
+/**
+ * Implements hook_comment_update().
+ */
+function node_notify_comment_update ($comment) {
+  node_notify_send_notifications($comment);
+}
+
+/**
+ * Implements hook_comment_delete().
+ */
+function node_notify_comment_delete ($comment) {
+  db_delete('node_notify_notification')
+    ->condition('cid', $comment->cid)
+    ->execute();
+}
+
+/**
  * Implements hook_cron().
  */
 function node_notify_cron () {
@@ -496,7 +642,7 @@ function node_notify_cron () {
 
   db_delete('node_notify_subscription')
     ->condition('subscribed_on', $expire, '<=')
-    ->condition('enabled', FALSE)
+    ->condition('enabled', 1)
     ->execute();
 
   db_query(
@@ -505,6 +651,21 @@ function node_notify_cron () {
   );
 }
 
+/**
+ * Create subscription for given node and subscriber.
+ *
+ * Creates subscription on a node identified by given $nid for a user
+ * identified by $uid is $uid is not 0 or by $email.
+ *
+ * @param $nid
+ *   Nid of a node to subscribe to.
+ * @param $uid
+ *   Uid of a user to subscribe.
+ * @param $email
+ *   Email of an anonymous user to subscribe.
+ * @param $enabled
+ *   Create enabled (TRUE) of disabled (FALSE) subscriptions.
+ */
 function node_notify_subscribe ($nid, $uid, $email = '', $enabled = TRUE) {
   if ($uid > 0) $email = ''; // make sure email is empty for registered user
   $sid = db_select('node_notify_subscription', 's')
@@ -546,10 +707,39 @@ function node_notify_subscribe ($nid, $uid, $email = '', $enabled = TRUE) {
   }
 }
 
+/**
+ * Disable subscription for given node and subscriber.
+ *
+ * Disables subscription on a node identified by given $nid for a user
+ * identified by $uid is $uid is not 0 or by $email.
+ *
+ * @param $nid
+ *   Nid of a node to unsubscribe from.
+ * @param $uid
+ *   Uid of a user to unsubscribe.
+ * @param $email
+ *   Email of an anonymous user to unsubscribe.
+ */
 function node_notify_unsubscribe ($nid, $uid, $email = '') {
   node_notify_subscribe($nid, $uid, $email, $enabled = FALSE);
 }
 
+/**
+ * Check if subscription exists.
+ *
+ * Disables subscription on a node identified by given $nid for a user
+ * identified by $uid is $uid is not 0 or by $email.
+ *
+ * @param $nid
+ *   Nid of a subscription node.
+ * @param $uid
+ *   Uid of a subscriber or 0.
+ * @param $email
+ *   Email of an anonymous subscriber.
+ *
+ * @return
+ *   TRUE if subscribed or FALSE.
+ */
 function node_notify_is_subscribed ($nid, $uid, $email = '') {
   $query = db_select('node_notify_subscription', 's')
     ->fields('s', array('enabled'))
@@ -575,6 +765,20 @@ function node_notify_mail ($key, &$message, $params) {
   $message['body'][] = $params['body'];
 }
 
+/**
+ * Check if comment will trigger Comment Notify notification for a given
+ * subscriber.
+ *
+ * @param $comment
+ *   Comment to check against.
+ * @param $uid
+ *   Uid of a subscriber.
+ * @param $email
+ *   Email of an anonymous subscriber.
+ *
+ * @return
+ *   TRUE (will trigger) or FALSE (will not).
+ */
 function _node_notify_processed_by_comment_notify ($comment, $uid, $email) {
   if (module_exists('comment_notify')) {
     // Is this subscriber subscribed to comment notify for all comments on
@@ -651,6 +855,16 @@ function _node_notify_processed_by_comment_notify ($comment, $uid, $email) {
   return FALSE;
 }
 
+/**
+ * Check if notification should be sent and send it.
+ *
+ * @param $subscription
+ *   Subscription row object from database.
+ * @param $notification
+ *   Notification row object from database.
+ * @param $comment
+ *   Comment to check against.
+ */
 function node_notify_send_notification ($subscription, $notification, $comment) {
   $notified = 0;
   if (_node_notify_processed_by_comment_notify($comment, $subscription->uid, $subscription->email)) {
@@ -705,6 +919,13 @@ function node_notify_send_notification ($subscription, $notification, $comment) 
     ->execute();
 }
 
+/**
+ * Check subscriptions affected by $comment and send notifications if
+ * necessary.
+ *
+ * @param $comment
+ *   Comment to check against.
+ */
 function node_notify_send_notifications ($comment) {
   if (COMMENT_PUBLISHED == $comment->status) {
     $types = node_notify_enabled_types();
@@ -750,28 +971,20 @@ function node_notify_send_notifications ($comment) {
 }
 
 /**
- * Implements hook_comment_insert().
+ * Retrieve notification row object from database.
+ *
+ * @param $cid
+ *   Cid of a notification.
+ * @param $nid
+ *   Nid of a subscription.
+ * @param $uid
+ *   Uid of a subscriber or 0.
+ * @param $email
+ *   Email of an anonymous subscriber.
+ *
+ * @return
+ *   Notification database row object or FALSE.
  */
-function node_notify_comment_insert ($comment) {
-  node_notify_send_notifications($comment);
-}
-
-/**
- * Implements hook_comment_update().
- */
-function node_notify_comment_update ($comment) {
-  node_notify_send_notifications($comment);
-}
-
-/**
- * Implements hook_comment_delete().
- */
-function node_notify_comment_delete ($comment) {
-  db_delete('node_notify_notification')
-    ->condition('cid', $comment->cid)
-    ->execute();
-}
-
 function node_notify_get_notification ($cid, $nid, $uid, $email = '') {
   $query = db_select('node_notify_notification', 'n')
     ->fields('n', array('sid', 'cid', 'notified'))
