@@ -793,7 +793,7 @@ function _node_notify_processed_by_comment_notify ($comment, $uid, $email) {
         WHERE c.nid = :nid
           AND c.status = :status
           AND cn.notify = :notify
-          AND ((u.uid = 0 AND c.mail = :mail) OR u.uid = :uid)',
+          AND ((u.uid = 0 AND c.mail = :mail) OR (u.uid = :uid AND u.uid > 0))',
       array(
         ':nid' => $comment->nid,
         ':status' => COMMENT_PUBLISHED,
