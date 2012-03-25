@@ -36,7 +36,8 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->admin = $this->drupalCreateUser($permissions);
 
     $this->node = $this->drupalCreateNode(array(
-      'type' => $this->type->type, 'comment' => COMMENT_NODE_OPEN,
+      'type' => $this->type->type,
+      'comment' => COMMENT_NODE_OPEN,
       'uid' => $this->privileged->uid,
     ));
   }
@@ -245,7 +246,64 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->assertMail('to', $email, "Notification mail sent to anonymous subscriber.");
   }
 
-  protected function testNodeNotifyCommentNotifyIntegrationWeb () {
+  // Issue #2: Issue: original poster is not getting notified when anonymous
+  // user comments on anonymous post.
+  protected function testNodeNotifyCommentNotifyIntegrationIssue2 () {
+    $this->enableContentType($this->type);
+    $email = $this->getRandomEmail();
+    do {
+      $email1 = $this->getRandomEmail();
+    } while ($email == $email1);
+
+    // variable_set('comment_notify_node_types', array($type => $type));
+    variable_set('comment_anonymous_' . $this->type->type, '1');
+
+    $perms = array(
+      'access content',
+      'post comments', 'skip comment approval',
+      'subscribe to comments', 'subscribe to node',
+      // 'access devel information',
+    );
+    // user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $perms);
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $perms);
+
+    $this->drupalLogout();
+
+    $node = $this->drupalCreateNode(array(
+      'type' => $this->type->type,
+      'uid' => 0,
+      'comment' => COMMENT_NODE_OPEN,
+    ));
+    node_notify_subscribe($node->nid, 0, $email);
+
+    $this->drupalGet("node/$node->nid");
+    $data = $this->postComment(
+      $node, $this->randomName(), $this->randomName(),
+      array('mail' => $email1, 'name' => $this->randomName())
+    );
+    $this->assertFalse($email == $email1, 'Emails are not the same.');
+
+    $count = db_query('SELECT COUNT(*) FROM {node_notify_subscription}')->fetchColumn();
+    $this->assertTrue($count == 1, 'One subscription exists.');
+
+    $count = db_query('SELECT COUNT(*) FROM {node_notify_notification}')->fetchColumn();
+    $this->assertTrue($count == 1, 'One notification processed.');
+
+    $note = node_notify_get_notification($data['id'], $node->nid, 0, $email);
+    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, 'Anonymous poster notified of follow up comment.');
+
+    $data = $this->postComment(
+      $node, $this->randomName(), $this->randomName(),
+      array('mail' => $email1, 'name' => $this->randomName(), 'notify_type' => 1, 'notify' => TRUE)
+    );
+    $count = db_query('SELECT COUNT(*) FROM {node_notify_notification}')->fetchColumn();
+    $this->assertTrue($count == 2, 'Second notification processed.');
+
+    $note = node_notify_get_notification($data['id'], $node->nid, 0, $email);
+    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, 'Anonymous poster notified of second comment.');
+  }
+
+  protected function testNodeNotifyCommentNotifyIntegration () {
     $type = $this->type->type;
     $nid = $this->node->nid;
     $this->enableContentType($this->type);
@@ -302,14 +360,6 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->assertTrue($note->notified == NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY, '#3 Notification handled by Comment Notify 1.');
     $note = node_notify_get_notification($data['id'], $nid, $this->privileged->uid);
     $this->assertTrue($note->notified == NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY, '#3 Notification handled by Comment Notify 2.');
-    if ($note->notified != NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY) {
-      $c1 = db_query('SELECT * FROM {comment} WHERE cid = :cid', array(':cid' => $cid))->fetchObject();
-      $c2 = db_query('SELECT * FROM {comment} WHERE cid = :cid', array(':cid' => $data['id']))->fetchObject();
-      $cn = db_query('SELECT * FROM {comment_notify} WHERE cid = :cid', array(':cid' => $data['id']))->fetchObject();
-      drush_log(print_r($c1, 1), 'error');
-      drush_log(print_r($c2, 1), 'error');
-      drush_log(print_r($cn, 1), 'error');
-    }
     $note = node_notify_get_notification($data['id'], $nid, 0, $email);
     $this->assertTrue($note->notified == NODE_NOTIFY_SKIPPED, '#3 Notification skipped -- commenter is subscriber.');
     $note = node_notify_get_notification($data['id'], $nid, $this->admin->uid);
