@@ -899,6 +899,8 @@ function node_notify_send_notification ($subscription, $notification, $comment) 
             'comment' => $comment,
             'subscriber' => $subscriber,
             'subscription' => $subscription,
+          ), array(
+            'sanitize' => FALSE,
           )),
         ));
 
