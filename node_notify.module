@@ -424,6 +424,13 @@ function node_notify_settings_form ($form, &$form_state) {
     ),
   );
 
+  $form['node_notify_log'] = array(
+    '#title' => t('Log notifications'),
+    '#type' => 'checkbox',
+    '#description' => t('Log information about notifications and email messages if they are sent.'),
+    '#default_value' => variable_get('node_notify_log', FALSE),
+  );
+
   return system_settings_form($form);
 }
 
@@ -869,6 +876,7 @@ function _node_notify_processed_by_comment_notify ($comment, $uid, $email) {
  */
 function node_notify_send_notification ($subscription, $notification, $comment) {
   $notified = NODE_NOTIFY_PENDING;
+  $message = NULL;
 
   if (_node_notify_processed_by_comment_notify($comment, $subscription->uid, $subscription->email)) {
     $notified = NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY;
@@ -889,7 +897,7 @@ function node_notify_send_notification ($subscription, $notification, $comment) 
         $mail = $subscriber->uid ? $subscriber->mail : $subscription->email;
         $language = user_preferred_language($subscriber);
 
-        drupal_mail('node_notify', 'comment_notification', $mail, $language, array(
+        $message = drupal_mail('node_notify', 'comment_notification', $mail, $language, array(
           'subject' => token_replace($subject, array(
             'comment' => $comment,
             'subscriber' => $subscriber,
@@ -914,6 +922,9 @@ function node_notify_send_notification ($subscription, $notification, $comment) 
       $notified = NODE_NOTIFY_SKIPPED;
     }
   }
+
+  $notification->notified = $notified;
+  node_notify_log($subscription, $notification, $comment, $message);
 
   db_update('node_notify_notification')
     ->condition('sid', $notification->sid)
@@ -998,4 +1009,64 @@ function node_notify_get_notification ($cid, $nid, $uid, $email = '') {
     array(':nid' => $nid, ':uid' => $uid, ':email' => $email)
   );
   return $query->execute()->fetchObject();
+}
+
+/**
+ * Log info about notifications' processing if logging is enabled.
+ *
+ * @param $subscription
+ *   Subscription database row object.
+ * @param $notification
+ *   Notification database row object.
+ * @param $comment
+ *   Comment that triggered notification.
+ * @param $message
+ *   Email message if notification was sent. NULL otherwise.
+ */
+function node_notify_log ($subscription, $notification, $comment, $message = NULL) {
+
+  if (!variable_get('node_notify_log', FALSE)) return;
+
+  $log_message = FALSE;
+  $variables = array(
+    '!comment' => l($comment->subject, 'comment/' . $comment->cid, array('fragment' => 'comment-'.$comment->cid)),
+    '!node_uri' => url('node/' . $comment->nid),
+    '!subscriber' => $subscription->uid > 0
+    ? l(t('user'), 'user/' . $subscription->uid)
+    : $subscription->email,
+  );
+
+  switch ($notification->notified) {
+    case NODE_NOTIFY_PENDING:
+      $log_message = 'Notification triggered by !comment NOT SENT to !subscriber and will be processed when another comment is posted on <a href="!node_uri">node</a>.';
+      break;
+
+    case NODE_NOTIFY_SENT:
+      $log_message = 'Notification triggered by !comment SENT to !subscriber.<hr><pre>!message</pre>';
+      $variables['!message'] = $message['subject'] . "\n\n" . $message['body'];
+      break;
+
+    case NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY:
+      $log_message = 'Notification triggered by !comment to !subscriber was handled by Comment Notify.';
+      break;
+
+    case NODE_NOTIFY_SKIPPED:
+      $log_message = 'Notification will not be sent to !subscriber, because he/she is author of comment (!comment).';
+      break;
+
+    case NODE_NOTIFY_DENIED:
+      $log_message = 'Notification denied for !subscriber. !subscriber has no subscribing permission or access to <a href="!node_uri">node</a>.';
+      break;
+  }
+
+  if ($log_message) {
+    watchdog('node_notify', $log_message, $variables);
+  }
+  else {
+    watchdog('node_notify', 'Unknown notification state @state. Comment !comment. Subscription @sid.', array(
+      '@state' => $notification->notified,
+      '@sid' => $subscription->sid,
+      '!comment' => l($comment->subject, comment_uri($comment)),
+    ), WATCHDOG_ERROR);
+  }
 }
