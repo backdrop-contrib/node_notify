@@ -1,5 +1,11 @@
 <?php
 
+/**
+ * @file
+ *
+ * Test Node Notify functionality and integration with Comment Notify.
+ */
+
 class NodeNotifyTestCase extends DrupalWebTestCase {
 
   protected $type = NULL;
@@ -42,10 +48,13 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     ));
   }
 
-  protected function tearDown () {
-    parent::tearDown();
-  }
 
+  /**
+   * Enabling content types for Node Notify.
+   *
+   * Disabling/enabling content type for node notify will hide/show
+   * subscription widgets on node forms accordingly.
+   */
   protected function testNodeNotifyEnabledTypes () {
     $this->drupalLogin($this->privileged);
 
@@ -60,6 +69,13 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->drupalLogout();
   }
 
+  /**
+   * Subscription link and widget for anonymous user.
+   *
+   * Anonymous user with "subscribe to node" permission granted sees
+   * subscription widget on node form and subscription link when visiting node
+   * page.
+   */
   protected function testNodeNotifyAnonymous () {
     $type = $this->type->type;
     $nid = $this->node->nid;
@@ -88,6 +104,13 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     ));
   }
 
+  /**
+   * Access to node/N/subscribe.
+   *
+   * node/N/subscribe is forbidden without "subscribe to node" and accessible
+   * with it. Anonymous user with this permission sees subscription
+   * field. Registered users are subscribed at once and redirected.
+   */
   protected function testNodeNotifySubscribeLink () {
     $type = $this->type->type;
     $nid = $this->node->nid;
@@ -141,6 +164,12 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->drupalLogout();
   }
 
+  /**
+   * Subscription widget type.
+   *
+   * Anonymous user should see text field to input email address on node
+   * form. Registered user should see checkbox.
+   */
   protected function testNodeNotifyNodeFormFieldType () {
     $type = $this->type->type;
     $nid = $this->node->nid;
@@ -163,6 +192,14 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     );
   }
 
+  /**
+   * Subscription field/checkbox value on node form.
+   *
+   * - Show different labels for checkbox on node form when author or
+   *   administrator is editing node created by registered user.
+   * - Anonymous user sees no widget when editing node.
+   * - User without "administer node subscriptions" sees no widget.
+   */
   protected function testNodeNotifyNodeFormFieldValue () {
     $type = $this->type->type;
     $nid = $this->node->nid;
@@ -209,6 +246,13 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     );
   }
 
+  /**
+   * Node Notify notifications.
+   *
+   * - Denied when anonymous has no 'subscribe to node' permission.
+   * - Skipped when comment and node author is the same.
+   * - Sent to anonymous with right permissions.
+   */
   protected function testNodeNotifyNotifications () {
     $type = $this->type->type;
     $nid = $this->node->nid;
@@ -246,63 +290,9 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->assertMail('to', $email, "Notification mail sent to anonymous subscriber.");
   }
 
-  // Issue #2: Issue: original poster is not getting notified when anonymous
-  // user comments on anonymous post.
-  protected function testNodeNotifyCommentNotifyIntegrationIssue2 () {
-    $this->enableContentType($this->type);
-    $email = $this->getRandomEmail();
-    do {
-      $email1 = $this->getRandomEmail();
-    } while ($email == $email1);
-
-    // variable_set('comment_notify_node_types', array($type => $type));
-    variable_set('comment_anonymous_' . $this->type->type, '1');
-
-    $perms = array(
-      'access content',
-      'post comments', 'skip comment approval',
-      'subscribe to comments', 'subscribe to node',
-      // 'access devel information',
-    );
-    // user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $perms);
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $perms);
-
-    $this->drupalLogout();
-
-    $node = $this->drupalCreateNode(array(
-      'type' => $this->type->type,
-      'uid' => 0,
-      'comment' => COMMENT_NODE_OPEN,
-    ));
-    node_notify_subscribe($node->nid, 0, $email);
-
-    $this->drupalGet("node/$node->nid");
-    $data = $this->postComment(
-      $node, $this->randomName(), $this->randomName(),
-      array('mail' => $email1, 'name' => $this->randomName())
-    );
-    $this->assertFalse($email == $email1, 'Emails are not the same.');
-
-    $count = db_query('SELECT COUNT(*) FROM {node_notify_subscription}')->fetchColumn();
-    $this->assertTrue($count == 1, 'One subscription exists.');
-
-    $count = db_query('SELECT COUNT(*) FROM {node_notify_notification}')->fetchColumn();
-    $this->assertTrue($count == 1, 'One notification processed.');
-
-    $note = node_notify_get_notification($data['id'], $node->nid, 0, $email);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, 'Anonymous poster notified of follow up comment.');
-
-    $data = $this->postComment(
-      $node, $this->randomName(), $this->randomName(),
-      array('mail' => $email1, 'name' => $this->randomName(), 'notify_type' => 1, 'notify' => TRUE)
-    );
-    $count = db_query('SELECT COUNT(*) FROM {node_notify_notification}')->fetchColumn();
-    $this->assertTrue($count == 2, 'Second notification processed.');
-
-    $note = node_notify_get_notification($data['id'], $node->nid, 0, $email);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, 'Anonymous poster notified of second comment.');
-  }
-
+  /**
+   * Integration with Comment Notify.
+   */
   protected function testNodeNotifyCommentNotifyIntegration () {
     $type = $this->type->type;
     $nid = $this->node->nid;
@@ -365,6 +355,90 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $note = node_notify_get_notification($data['id'], $nid, $this->admin->uid);
     $this->assertTrue($note->notified == NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY, '#3 Notification handled by Comment Notify 3.');
   }
+
+  /**
+   * Issue with Comment Notify integration.
+   *
+   * Issue #2: original poster is not getting notified when anonymous user
+   * comments on anonymous post.
+   */
+  protected function testNodeNotifyIssue2 () {
+    $this->enableContentType($this->type);
+    $email = $this->getRandomEmail();
+    do {
+      $email1 = $this->getRandomEmail();
+    } while ($email == $email1);
+
+    // variable_set('comment_notify_node_types', array($type => $type));
+    variable_set('comment_anonymous_' . $this->type->type, '1');
+
+    $perms = array(
+      'access content',
+      'post comments', 'skip comment approval',
+      'subscribe to comments', 'subscribe to node',
+      // 'access devel information',
+    );
+    // user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $perms);
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $perms);
+
+    $this->drupalLogout();
+
+    $node = $this->drupalCreateNode(array(
+      'type' => $this->type->type,
+      'uid' => 0,
+      'comment' => COMMENT_NODE_OPEN,
+    ));
+    node_notify_subscribe($node->nid, 0, $email);
+
+    $this->drupalGet("node/$node->nid");
+    $data = $this->postComment(
+      $node, $this->randomName(), $this->randomName(),
+      array('mail' => $email1, 'name' => $this->randomName())
+    );
+    $this->assertFalse($email == $email1, 'Emails are not the same.');
+
+    $count = db_query('SELECT COUNT(*) FROM {node_notify_subscription}')->fetchColumn();
+    $this->assertTrue($count == 1, 'One subscription exists.');
+
+    $count = db_query('SELECT COUNT(*) FROM {node_notify_notification}')->fetchColumn();
+    $this->assertTrue($count == 1, 'One notification processed.');
+
+    $note = node_notify_get_notification($data['id'], $node->nid, 0, $email);
+    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, 'Anonymous poster notified of follow up comment.');
+
+    $data = $this->postComment(
+      $node, $this->randomName(), $this->randomName(),
+      array('mail' => $email1, 'name' => $this->randomName(), 'notify_type' => 1, 'notify' => TRUE)
+    );
+    $count = db_query('SELECT COUNT(*) FROM {node_notify_notification}')->fetchColumn();
+    $this->assertTrue($count == 2, 'Second notification processed.');
+
+    $note = node_notify_get_notification($data['id'], $node->nid, 0, $email);
+    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, 'Anonymous poster notified of second comment.');
+  }
+
+  /**
+   * Issue #3: display no subscription widget when node is authored by
+   * anonymous user.
+   */
+  protected function testNodeNotifyIssue3 () {
+    $type = $this->type->type;
+    $nid = $this->node->nid;
+
+    $this->node->uid = 0;
+    node_save($this->node);
+
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array("edit any $type content", 'subscribe to node', 'administer node subscriptions'));
+
+    $this->enableContentType($this->type);
+    $this->drupalLogout();
+
+    $this->drupalGet("node/$nid/edit");
+    $this->assertNoFieldById('edit-node-notify-subscribe', NULL,
+      'No field displayed for anonymous user when editing existing node by anonymous user.'
+    );
+  }
+
 
   protected function getRandomEmail () {
     return $this->randomName() . '@example.com';
