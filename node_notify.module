@@ -466,7 +466,7 @@ function node_notify_form_alter (&$form, &$form_state, $form_id) {
         '#default_value' => $node->node_notify_subscribe,
       );
     }
-    else if (user_access('administer node subscriptions')) {
+    else if (user_access('administer node subscriptions') && $node->uid > 0) {
       $form['node_notify_subscribe'] = array(
         '#type' => 'checkbox',
         '#title' => t('Author receives comment notifications by email'),
