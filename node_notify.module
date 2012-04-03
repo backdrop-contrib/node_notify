@@ -163,7 +163,7 @@ function node_notify_disable_page($token) {
   else {
     drupal_set_message(t('Sorry, there was a problem unsubscribing from notifications.'));
   }
-  return $message;
+  return ' ';
 }
 
 /**
