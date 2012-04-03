@@ -178,12 +178,11 @@ function node_notify_access ($permission, $node) {
  * User access callback.
  */
 function node_notify_user_access ($account) {
-  global $user;
-  if ($user->uid == $account->uid) {
+  if ($GLOBALS['user']->uid == $account->uid) {
     return user_access('subscribe to node');
   }
   else {
-    return user_access('user_edit_access', $user)
+    return user_access('user_edit_access', $account)
       && user_access('administer node subscriptions');
   }
 }
@@ -193,9 +192,8 @@ function node_notify_user_access ($account) {
  * an anonymous user.
  */
 function node_notify_subscribe_page ($node) {
-  global $user;
-  if ($user->uid) {
-    node_notify_subscribe($node->nid, $user->uid);
+  if (user_is_logged_in()) {
+    node_notify_subscribe($node->nid, $GLOBALS['user']->uid);
     drupal_set_message(t('Subscribed to %title.', array('%title' => $node->title)));
     drupal_goto('node/'.$node->nid);
   }
@@ -243,9 +241,8 @@ function node_notify_subscribe_form_submit ($form, &$form_state) {
  * Page callback to unsubscribe current user from a node.
  */
 function node_notify_unsubscribe_page ($node) {
-  global $user;
-  if ($user->uid > 0) {
-    node_notify_unsubscribe($node->nid, $user->uid);
+  if (user_is_logged_in()) {
+    node_notify_unsubscribe($node->nid, $GLOBALS['user']->uid);
     drupal_set_message(t('Unsubscribed from %title.', array('%title' => $node->title)));
   }
   drupal_goto('node/'.$node->nid);
@@ -311,7 +308,7 @@ function node_notify_node_enable_subscription_page ($node, $sid, $enable = TRUE)
 /**
  * Page to display user's subscriptions.
  */
-function node_notify_user_subscriptions_page ($user) {
+function node_notify_user_subscriptions_page ($account) {
   $header = array(
     array('data' => t('Title'), 'field' => 'title', 'sort' => 'asc'),
     array('data' => t('Date'), 'field' => 'subscribed_on', 'sort' => 'desc'),
@@ -322,7 +319,7 @@ function node_notify_user_subscriptions_page ($user) {
   $query->leftJoin('node', 'n', '(s.nid = n.nid)');
   $query->fields('s', array('sid', 'subscribed_on', 'nid', 'uid', 'enabled'));
   $query->fields('n', array('title'));
-  $query->condition('s.uid', $user->uid);
+  $query->condition('s.uid', $account->uid);
 
   $query
     ->extend('PagerDefault')->limit(20)
@@ -330,7 +327,7 @@ function node_notify_user_subscriptions_page ($user) {
 
   $rows = array();
   foreach ($query->execute() as $record) {
-    $url = 'user/'.$user->uid.'/subscriptions/'.$record->sid;
+    $url = 'user/'.$account->uid.'/subscriptions/'.$record->sid;
     $rows[] = array(
       l($record->title, 'node/'.$record->nid),
       format_date($record->subscribed_on),
@@ -390,7 +387,7 @@ function node_notify_settings_form ($form, &$form_state) {
 
   $form['node_notify_expires'] = array(
     '#title' => t('Expiration date'),
-    '#description' => t('Subscription is considered expired if it is disabled and subscription or modification date is earlier than this setting. Expiration date can be <a href="http://www.php.net/manual/en/datetime.formats.relative.php">relative</a>. Current value would produce <span id="node-notify-expires-test">%time</span>.', array(
+    '#description' => t('Subscription is considered expired if it is disabled and subscription or modification date is earlier than this setting. Expiration date can and should be <a href="http://www.php.net/manual/en/datetime.formats.relative.php">relative</a>. Current value would produce <span id="node-notify-expires-test">%time</span>.', array(
       '%time' => format_date(strtotime(variable_get('node_notify_expires', '-1 month')), 'custom', 'Y-m-d H:i:s'),
     )),
     '#type' => 'textfield',
@@ -455,11 +452,9 @@ function node_notify_form_alter (&$form, &$form_state, $form_id) {
   $node->node_notify_subscribe = isset($node->node_notify_subscribe)
     ? $node->node_notify_subscribe : NULL;
 
-  global $user;
-
   // Editing old node
   if (isset($node->nid)) {
-    if (!user_is_anonymous() && $node->uid == $user->uid && user_access('subscribe to node')) {
+    if (user_is_logged_in() && $node->uid == $GLOBALS['user']->uid && user_access('subscribe to node')) {
       $form['node_notify_subscribe'] = array(
         '#type' => 'checkbox',
         '#title' => t('Receive comment notifications by email'),
@@ -476,19 +471,19 @@ function node_notify_form_alter (&$form, &$form_state, $form_id) {
   }
   // Creating new node
   else if (user_access('subscribe to node')) {
-    if (user_is_anonymous()) {
+    if (user_is_logged_in()) {
       $form['node_notify_subscribe'] = array(
-        '#type' => 'textfield',
+        '#type' => 'checkbox',
         '#title' => t('Receive comment notifications by email'),
-        '#description' => t('Enter your email address to receive email notifications.'),
-        '#element_validate' => array('node_notify_validate_email_address'),
         '#default_value' => $node->node_notify_subscribe,
       );
     }
     else {
       $form['node_notify_subscribe'] = array(
-        '#type' => 'checkbox',
+        '#type' => 'textfield',
         '#title' => t('Receive comment notifications by email'),
+        '#description' => t('Enter your email address to receive email notifications.'),
+        '#element_validate' => array('node_notify_validate_email_address'),
         '#default_value' => $node->node_notify_subscribe,
       );
     }
@@ -534,12 +529,11 @@ function node_notify_field_extra_fields () {
  * Implement hook_node_load().
  */
 function node_notify_node_load ($nodes, $types) {
-  global $user;
-  if ($user->uid > 0 && user_access('subscribe to node')) {
+  if (user_is_logged_in() && user_access('subscribe to node')) {
     $result = db_select('node_notify_subscription', 's')
       ->fields('s')
       ->condition('nid', array_keys($nodes), 'IN')
-      ->condition('uid', $user->uid)
+      ->condition('uid', $GLOBALS['user']->uid)
       ->condition('uid', 0, '>')
       ->execute();
     foreach ($result as $rec) {
@@ -561,11 +555,12 @@ function node_notify_node_insert ($node) {
  * Implement hook_node_update().
  */
 function node_notify_node_update ($node) {
-  global $user;
   $account = user_load($node->uid);
   // to edit subscription one must be author of a node and have 'subscribe to
   // node' permission or permission to manage subscriptions
-  if ($account->uid > 0 && (($user->uid == $account->uid && user_access('subscribe to node', $account)) || user_access('administer node subscriptions'))) {
+  if ($account->uid > 0 && (($GLOBALS['user']->uid == $account->uid && user_access('subscribe to node', $account))
+                            || user_access('administer node subscriptions')))
+  {
     if (!empty($node->node_notify_subscribe)) {
       if ($node->node_notify_subscribe) {
         node_notify_subscribe($node->nid, $node->uid);
@@ -599,8 +594,7 @@ function node_notify_node_view ($node, $view_mode, $langcode) {
   && in_array($node->type, node_notify_enabled_types())
   && $view_mode == 'full')
   {
-    global $user;
-    if ($user->uid > 0 && node_notify_is_subscribed($node->nid, $user->uid)) {
+    if (user_is_logged_in() && node_notify_is_subscribed($node->nid, $GLOBALS['user']->uid)) {
       $node->content['links']['node']['#links']['unsubscribe'] = array(
         'title' => t('Unsubscribe'),
         'href' => 'node/' . $node->nid . '/unsubscribe',
