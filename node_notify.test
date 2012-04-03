@@ -15,7 +15,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
   protected $privileged = NULL;
   protected $admin = NULL;
 
-  public static function getInfo () {
+  public static function getInfo() {
     return array(
       'name' => t('Node Notify tests'),
       'description' => t('Test Node Notify behaviour and integration with Comment Notify.'),
@@ -23,7 +23,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     );
   }
 
-  protected function setUp () {
+  protected function setUp() {
     parent::setUp('node_notify', 'comment_notify');
 
     $this->type = $this->createContentType();
@@ -55,7 +55,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    * Disabling/enabling content type for node notify will hide/show
    * subscription widgets on node forms accordingly.
    */
-  protected function testNodeNotifyEnabledTypes () {
+  protected function testNodeNotifyEnabledTypes() {
     $this->drupalLogin($this->privileged);
 
     $this->disableContentTypes();
@@ -76,7 +76,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    * subscription widget on node form and subscription link when visiting node
    * page.
    */
-  protected function testNodeNotifyAnonymous () {
+  protected function testNodeNotifyAnonymous() {
     $type = $this->type->type;
     $nid = $this->node->nid;
     user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array("create $type content"));
@@ -111,7 +111,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    * with it. Anonymous user with this permission sees subscription
    * field. Registered users are subscribed at once and redirected.
    */
-  protected function testNodeNotifySubscribeLink () {
+  protected function testNodeNotifySubscribeLink() {
     $type = $this->type->type;
     $nid = $this->node->nid;
     $this->enableContentType($this->type);
@@ -170,7 +170,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    * Anonymous user should see text field to input email address on node
    * form. Registered user should see checkbox.
    */
-  protected function testNodeNotifyNodeFormFieldType () {
+  protected function testNodeNotifyNodeFormFieldType() {
     $type = $this->type->type;
     $nid = $this->node->nid;
 
@@ -178,14 +178,14 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->enableContentType($this->type);
 
     $this->drupalLogin($this->privileged);
-    $this->drupalGet('node/add/'.$this->type->type);
+    $this->drupalGet('node/add/' . $this->type->type);
     $this->assertFieldByXpath(
       "//input[@type='checkbox' and @id='edit-node-notify-subscribe']", NULL,
       'Checkbox for registerd user.'
     );
 
     $this->drupalLogout();
-    $this->drupalGet('node/add/'.$this->type->type);
+    $this->drupalGet('node/add/' . $this->type->type);
     $this->assertFieldByXpath(
       "//input[@type='text' and @id='edit-node-notify-subscribe']", NULL,
       'Text field for anonymous user.'
@@ -200,7 +200,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    * - Anonymous user sees no widget when editing node.
    * - User without "administer node subscriptions" sees no widget.
    */
-  protected function testNodeNotifyNodeFormFieldValue () {
+  protected function testNodeNotifyNodeFormFieldValue() {
     $type = $this->type->type;
     $nid = $this->node->nid;
 
@@ -253,7 +253,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    * - Skipped when comment and node author is the same.
    * - Sent to anonymous with right permissions.
    */
-  protected function testNodeNotifyNotifications () {
+  protected function testNodeNotifyNotifications() {
     $type = $this->type->type;
     $nid = $this->node->nid;
     $this->enableContentType($this->type);
@@ -293,7 +293,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
   /**
    * Integration with Comment Notify.
    */
-  protected function testNodeNotifyCommentNotifyIntegration () {
+  protected function testNodeNotifyCommentNotifyIntegration() {
     $type = $this->type->type;
     $nid = $this->node->nid;
     $this->enableContentType($this->type);
@@ -362,7 +362,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    * Issue #2: original poster is not getting notified when anonymous user
    * comments on anonymous post.
    */
-  protected function testNodeNotifyIssue2 () {
+  protected function testNodeNotifyIssue2() {
     $this->enableContentType($this->type);
     $email = $this->getRandomEmail();
     do {
@@ -421,7 +421,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    * Issue #3: display no subscription widget when node is authored by
    * anonymous user.
    */
-  protected function testNodeNotifyIssue3 () {
+  protected function testNodeNotifyIssue3() {
     $type = $this->type->type;
     $nid = $this->node->nid;
 
@@ -440,11 +440,11 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
   }
 
 
-  protected function getRandomEmail () {
+  protected function getRandomEmail() {
     return $this->randomName() . '@example.com';
   }
 
-  protected function createContentType () {
+  protected function createContentType() {
     $settings = array(
       'type' => 'node_notify_type',
       'title_label' => 'Title',
@@ -454,13 +454,13 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     return $content_type;
   }
 
-  protected function enableContentType ($type) {
+  protected function enableContentType($type) {
     variable_set('node_notify_enabled_types', array(
       $type->type => $type->type,
     ));
   }
 
-  protected function disableContentTypes () {
+  protected function disableContentTypes() {
     variable_set('node_notify_enabled_types', array());
   }
 

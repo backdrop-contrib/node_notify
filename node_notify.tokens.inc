@@ -9,7 +9,7 @@
 /**
  * Implements hook_token_info().
  */
-function node_notify_token_info () {
+function node_notify_token_info() {
   $info['types']['subscriber'] = array(
     'name' => t('Subscriber'),
     'description' => t('User subscribed to a node comment notifications.'),
@@ -33,7 +33,7 @@ function node_notify_token_info () {
 /**
  * Implements hook_tokens().
  */
-function node_notify_tokens ($type, $tokens, array $data = array(), array $options = array()) {
+function node_notify_tokens($type, $tokens, array $data = array(), array $options = array()) {
   $replacements = array();
 
   switch ($type) {
@@ -46,7 +46,7 @@ function node_notify_tokens ($type, $tokens, array $data = array(), array $optio
     case 'subscription':
       if (!empty($data['subscription']) && isset($tokens['unsubscribe-url'])) {
         $replacements[$tokens['unsubscribe-url']] =
-          url('node_notify/unsubscribe/'.$data['subscription']->token, array('absolute' => TRUE));
+          url('node_notify/unsubscribe/' . $data['subscription']->token, array('absolute' => TRUE));
       }
       break;
   }

@@ -1,9 +1,15 @@
 <?php
 
 /**
+ * @file
+ *
+ * Node Notify .install file.
+ */
+
+/**
  * Implements hook_install().
  */
-function node_notify_install () {
+function node_notify_install() {
   $weight = (int) db_select('system', 's')
     ->fields('s', array('weight'))
     ->condition('name', 'comment_notify')
@@ -21,14 +27,14 @@ function node_notify_install () {
 /**
  * Implements hook_install().
  */
-function node_notify_uninstall () {
+function node_notify_uninstall() {
   db_delete('variable')->condition('name', 'node_notify%', 'LIKE')->execute();
 }
 
 /**
  * Implements hook_schema().
  */
-function node_notify_schema () {
+function node_notify_schema() {
   $schema = array();
 
   $schema['node_notify_subscription'] = array(
