@@ -243,8 +243,11 @@ function node_notify_unsubscribe_page($node) {
   if (user_is_logged_in()) {
     node_notify_unsubscribe($node->nid, $GLOBALS['user']->uid);
     drupal_set_message(t('Unsubscribed from %title.', array('%title' => $node->title)));
+    drupal_goto('node/' . $node->nid);
   }
-  drupal_goto('node/' . $node->nid);
+  else {
+    drupal_access_denied();
+  }
 }
 
 /**

@@ -114,6 +114,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
   protected function testNodeNotifySubscribeLink() {
     $type = $this->type->type;
     $nid = $this->node->nid;
+    $email = $this->getRandomEmail();
     $this->enableContentType($this->type);
 
     $this->drupalLogout();
@@ -130,10 +131,13 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->assertResponse(200, 'Accessible');
     $this->assertPattern('/node-notify-subscribe-form/', 'Subscription form is displayed for anonymous user.');
     // TODO: Fill the form and check subscription
+    $edit['email'] = $email;
+    $this->drupalPost(NULL, $edit, t('Subscribe'));
+    $this->assertURL("node/$nid", 'Redirected to node page.');
+    $this->assertTrue(node_notify_is_subscribed($nid, 0, $email), 'Anonymous user subscribed with node/N/subscribe form.');
 
     $this->drupalGet("node/$nid/unsubscribe");
-    $this->assertUrl("node/$nid", array(), 'Anonymous user should be redirected back to node page.');
-    $this->assertNoPattern('/Unsubscribed from/', 'Anonymous user should not see "Unsubscribe" message.');
+    $this->assertResponse(403, 'Anonymous user is not allowed to access node/N/unsubscribe URL.');
 
     user_role_revoke_permissions(DRUPAL_ANONYMOUS_RID, array('subscribe to node'));
 
