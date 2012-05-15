@@ -133,7 +133,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     // TODO: Fill the form and check subscription
     $edit['email'] = $email;
     $this->drupalPost(NULL, $edit, t('Subscribe'));
-    $this->assertURL("node/$nid", 'Redirected to node page.');
+    $this->assertUrl("node/$nid", array(), 'Redirected to node page.');
     $this->assertTrue(node_notify_is_subscribed($nid, 0, $email), 'Anonymous user subscribed with node/N/subscribe form.');
 
     $this->drupalGet("node/$nid/unsubscribe");
