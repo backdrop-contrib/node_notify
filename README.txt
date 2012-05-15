@@ -1,4 +1,4 @@
-NODE NOTIFY
+Node Notify
 ===========
 
 Introduction
@@ -37,7 +37,7 @@ Notify is NOT required for Node Notify to work.
 Installation
 ------------
 
-There are not special installation steps. Drop it in site modules
+There are no special installation steps. Drop it in site modules
 folder and enable it. By default Node Notify does not alter appearance
 of nodes and does not sent any notifications.
 
