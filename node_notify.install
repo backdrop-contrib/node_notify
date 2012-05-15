@@ -7,6 +7,27 @@
  */
 
 /**
+ * Implements hook_requirements().
+ */
+function node_notify_requirements($phase) {
+  $requirements = array();
+
+  $t = get_t();
+
+  if ('runtime' == $phase && module_exists('comment_notify')) {
+    $info = system_get_info('module', 'comment_notify');
+    $requirements['comment_notify'] = array(
+      'title' => $t('Node Notify'),
+      'value' => $info['version'],
+      'description' => $t('Node Notify expects Comment Notify version 7.x-1.0.'),
+      'severity' => $info['version'] == '7.x-1.0' ? REQUIREMENT_OK : REQUIREMENT_WARNING,
+    );
+  }
+
+  return $requirements;
+}
+
+/**
  * Implements hook_install().
  */
 function node_notify_install() {
