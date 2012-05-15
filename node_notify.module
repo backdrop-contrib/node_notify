@@ -70,7 +70,7 @@ function node_notify_permission() {
       'description' => 'View and edit node subscriptions.',
     ),
     'subscribe to node' => array(
-      'title' => 'Subscribe to node notifications.',
+      'title' => 'Subscribe to node notifications',
       'description' => 'Subscribe to receive notifications about new node comments.',
     ),
   );
@@ -331,7 +331,7 @@ function node_notify_node_enable_subscription_page($node, $sid, $enable = TRUE) 
 }
 
 /**
- * Page to display user's subscriptions.
+ * Page to display account's subscriptions.
  */
 function node_notify_user_subscriptions_page($account) {
   $header = array(
@@ -525,7 +525,7 @@ function node_notify_validate_email_address($element, &$form_state, $form) {
 }
 
 /**
- * Return array of enabled types.
+ * Returns array of enabled types.
  *
  * @return
  *   Array of enabled types' machine names.
@@ -697,8 +697,8 @@ function node_notify_cron() {
 /**
  * Create subscription for given node and subscriber.
  *
- * Creates subscription on a node identified by given $nid for a user
- * identified by $uid is $uid is not 0 or by $email.
+ * Creates subscription on a node identified by $nid for a user identified by
+ * $uid or by $email if $uid is 0.
  *
  * @param $nid
  *   Nid of a node to subscribe to.
@@ -754,7 +754,7 @@ function node_notify_subscribe($nid, $uid, $email = '', $enabled = TRUE) {
  * Disable subscription for given node and subscriber.
  *
  * Disables subscription on a node identified by given $nid for a user
- * identified by $uid is $uid is not 0 or by $email.
+ * identified by $uid or by $email if $uid is 0.
  *
  * @param $nid
  *   Nid of a node to unsubscribe from.
@@ -770,8 +770,8 @@ function node_notify_unsubscribe($nid, $uid, $email = '') {
 /**
  * Check if subscription exists.
  *
- * Disables subscription on a node identified by given $nid for a user
- * identified by $uid is $uid is not 0 or by $email.
+ * Checks that row exists in subscription with given column values and returns
+ * @enabled@ field or FALSE if row does not exist.
  *
  * @param $nid
  *   Nid of a subscription node.
@@ -899,7 +899,7 @@ function _node_notify_processed_by_comment_notify($comment, $uid, $email) {
 }
 
 /**
- * Check if notification should be sent and send it.
+ * Check if notification should be sent and send it if so.
  *
  * @param $subscription
  *   Subscription row object from database.
