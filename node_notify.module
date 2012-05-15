@@ -34,6 +34,29 @@ by going to [subscription:unsubscribe-url]
 
 
 /**
+ * Implements hook_help().
+ */
+function node_notify_help($path, $arg) {
+  switch ($path) {
+    case 'admin/help#node_notify':
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('Node Notify is a lightweight module to allow subscription to comments on nodes for registered and anonymous users. It was specifically designed to integrate with <a href="!comment_notify_url">Comment Notify</a>, i.e. Node Notify will not send email notifications if they are sent by Comment Notify.', array('!comment_notify_url' => 'http://drupal.org/project/comment_notify')) . '</p>';
+      $output .= '<h3>' . t('Uses') . '</h3>';
+      $output .= '<p>' . t('Node types to enable subscription to should be selected at <a href="!config_url">configuration page</a>. Email template can be customized there too. Do not forget to adjust <a href="!perm_url">permissions</a>:', array('!config_url' => url('admin/config/people/node_notify'), '!perm_url' => url('admin/people/permissions', array('fragment' => 'module-node_notify')))) . '</p>';
+      $output .= '<dl>';
+      $output .= '<dt>' . t('Administer Node Notify') . '</dt>';
+      $output .= '<dd>' . t('Enables role to access Node Notify configuration page.') . '</dd>';
+      $output .= '<dt>' . t('Administer node subscriptions') . '</dt>';
+      $output .= '<dd>' . t('Enables role to disable or enable existing subscriptions on a node through "Subscriptions" tab on node page. Allows changing node\'s subscription status for node\'s (registered) author when combined with permission to edit node.') . '</dd>';
+      $output .= '<dt>' . t('Subscribe to node notifications') . '</dt>';
+      $output .= '<dd>' . t('Allows role to subscribe to comment notifications on nodes.') . '</dd>';
+      $output .= '</dl>';
+      return $output;
+  }
+}
+
+/**
  * Implements hook_permission().
  */
 function node_notify_permission() {
