@@ -170,6 +170,19 @@ function node_notify_menu() {
 }
 
 /**
+ * Implements hook_module_implements_alter().
+ */
+function node_notify_module_implements_alter(&$implementations, $hook) {
+  if (in_array($hook, array('comment_insert', 'comment_update'))) {
+    if (isset($implementations['comment_notify']) && isset($implementations['node_notify'])) {
+      $node_notify = $implementations['node_notify'];
+      unset($implementations['node_notify']);
+      $implementations['node_notify'] = $node_notify;
+    }
+  }
+}
+
+/**
  * Page callback to disable subscriptions by a given token.
  */
 function node_notify_disable_page($token) {

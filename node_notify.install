@@ -30,19 +30,6 @@ function node_notify_requirements($phase) {
  * Implements hook_install().
  */
 function node_notify_install() {
-  $weight = (int) db_select('system', 's')
-    ->fields('s', array('weight'))
-    ->condition('name', 'comment_notify')
-    ->condition('type', 'module')
-    ->execute()
-    ->fetchColumn();
-
-  db_update('system')
-    ->condition('name', 'node_notify')
-    ->condition('type', 'module')
-    ->fields(array('weight' => $weight + 1))
-    ->execute();
-
   $t = get_t();
   drupal_set_message($t('<a href="!url">Configure</a> Node Notify to start using it.', array(
     '!url' => check_plain(url('admin/config/people/node_notify')),
