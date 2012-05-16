@@ -2,7 +2,6 @@
 
 /**
  * @file
- *
  * Test Node Notify functionality and integration with Comment Notify.
  */
 
@@ -15,6 +14,9 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
   protected $privileged = NULL;
   protected $admin = NULL;
 
+  /**
+   * Description.
+   */
   public static function getInfo() {
     return array(
       'name' => t('Node Notify tests'),
@@ -23,6 +25,9 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     );
   }
 
+  /**
+   * Set up state before testing.
+   */
   protected function setUp() {
     parent::setUp('node_notify', 'comment_notify');
 
@@ -30,15 +35,28 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
 
     $type = $this->type->type;
     $permissions = array(
-      'access content', "create $type content", "edit own $type content", "delete own $type content",
+      'access content',
+      "create $type content",
+      "edit own $type content",
+      "delete own $type content",
     );
 
     $this->unprivileged = $this->drupalCreateUser($permissions);
 
-    $permissions += array(100 => 'subscribe to node', 'post comments', 'skip comment approval', 'subscribe to comments');
+    $permissions += array(
+      100 => 'subscribe to node',
+      'post comments',
+      'skip comment approval',
+      'subscribe to comments',
+    );
     $this->privileged = $this->drupalCreateUser($permissions);
 
-    $permissions += array(200 => 'administer node notify', 'administer node subscriptions', "edit any $type content", "delete any $type content");
+    $permissions += array(
+      200 => 'administer node notify',
+      'administer node subscriptions',
+      "edit any $type content",
+      "delete any $type content",
+    );
     $this->admin = $this->drupalCreateUser($permissions);
 
     $this->node = $this->drupalCreateNode(array(
@@ -130,7 +148,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->drupalGet("node/$nid/subscribe");
     $this->assertResponse(200, 'Accessible');
     $this->assertPattern('/node-notify-subscribe-form/', 'Subscription form is displayed for anonymous user.');
-    // TODO: Fill the form and check subscription
+
     $edit['email'] = $email;
     $this->drupalPost(NULL, $edit, t('Subscribe'));
     $this->assertUrl("node/$nid", array(), 'Redirected to node page.');
@@ -241,9 +259,9 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
       'No field displayed for anonymous user when editing existing node.'
     );
 
-    $tmpUser = $this->drupalCreateUser(array("edit any $type content"));
+    $tmp_user = $this->drupalCreateUser(array("edit any $type content"));
 
-    $this->drupalLogin($tmpUser);
+    $this->drupalLogin($tmp_user);
     $this->drupalGet("node/$nid/edit");
     $this->assertNoFieldById('edit-node-notify-subscribe', NULL,
       'No field displayed for user with no "administer node subscription" permission when editing existing node.'
@@ -263,7 +281,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->enableContentType($this->type);
     $email = $this->getRandomEmail();
 
-    // this skips permission checking
+    // This skips permission checking.
     node_notify_subscribe($nid, 0, $email);
     node_notify_subscribe($nid, $this->privileged->uid);
 
@@ -306,7 +324,12 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     variable_set('comment_notify_node_types', array($type => $type));
     variable_set('comment_anonymous_' . $type, '1');
 
-    $perms = array('subscribe to node', 'post comments', 'skip comment approval', 'subscribe to comments');
+    $perms = array(
+      'subscribe to node',
+      'post comments',
+      'skip comment approval',
+      'subscribe to comments',
+    );
     user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $perms);
     user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $perms);
 
@@ -325,9 +348,9 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $note = node_notify_get_notification($data['id'], $nid, $this->privileged->uid);
     $this->assertTrue($note->notified == NODE_NOTIFY_SENT, '#1 Notification to user sent.');
     $note = node_notify_get_notification($data['id'], $nid, $this->unprivileged->uid);
-    $this->assertFalse((boolean)$note, '#1 User is not subscribed 1.');
+    $this->assertFalse((boolean) $note, '#1 User is not subscribed 1.');
     $note = node_notify_get_notification($data['id'], $nid, $this->admin->uid);
-    $this->assertFalse((boolean)$note, '#1 User is not subscribed 2.');
+    $this->assertFalse((boolean) $note, '#1 User is not subscribed 2.');
     $this->drupalLogout();
 
     node_notify_subscribe($nid, $this->unprivileged->uid);
@@ -346,7 +369,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
 
     node_notify_subscribe($nid, $this->admin->uid);
 
-    // anonymous
+    // Anonymous.
     $cid = $data['id'];
     $this->drupalGet("comment/reply/$nid/$cid");
     $data = $this->postComment(NULL, $this->randomName(), $this->randomName(), array('name' => $this->randomName(), 'mail' => $email));
@@ -412,7 +435,12 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
 
     $data = $this->postComment(
       $node, $this->randomName(), $this->randomName(),
-      array('mail' => $email1, 'name' => $this->randomName(), 'notify_type' => 1, 'notify' => TRUE)
+      array(
+        'mail' => $email1,
+        'name' => $this->randomName(),
+        'notify_type' => 1,
+        'notify' => TRUE,
+      )
     );
     $count = db_query('SELECT COUNT(*) FROM {node_notify_notification}')->fetchColumn();
     $this->assertTrue($count == 2, 'Second notification processed.');
@@ -432,7 +460,11 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->node->uid = 0;
     node_save($this->node);
 
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array("edit any $type content", 'subscribe to node', 'administer node subscriptions'));
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array(
+      "edit any $type content",
+      'subscribe to node',
+      'administer node subscriptions',
+    ));
 
     $this->enableContentType($this->type);
     $this->drupalLogout();
@@ -444,10 +476,22 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
   }
 
 
+  /**
+   * Generate random email address with example.com as domain part.
+   *
+   * @return string
+   *   Random email address.
+   */
   protected function getRandomEmail() {
     return $this->randomName() . '@example.com';
   }
 
+  /**
+   * Creates node_notify_type content type.
+   *
+   * @return object
+   *   Content type object.
+   */
   protected function createContentType() {
     $settings = array(
       'type' => 'node_notify_type',
@@ -458,16 +502,45 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     return $content_type;
   }
 
+  /**
+   * Enables subscriptions on content type.
+   *
+   * @param object $type
+   *   Content type object.
+   */
   protected function enableContentType($type) {
     variable_set('node_notify_enabled_types', array(
       $type->type => $type->type,
     ));
   }
 
+  /**
+   * Disables any enabled content types.
+   */
   protected function disableContentTypes() {
     variable_set('node_notify_enabled_types', array());
   }
 
+  /**
+   * Post a comment on given node.
+   *
+   * Copied from Comment Notify test case and slightly modified.
+   *
+   * @param object $node
+   *   Node to post on or NULL to use current page.
+   * @param string $subject
+   *   Subject of a comment.
+   * @param string $comment
+   *   Comment text.
+   * @param array $notify
+   *   Parameters for Comment Notify.
+   * @param array $contact
+   *   Comment contact details (name, mail).
+   *
+   * @return array
+   *   If comment was posted, associative array with id, subject, and comment
+   *   keys.
+   */
   function postComment($node, $subject, $comment, $notify = NULL, $contact = NULL) {
     $langcode = LANGUAGE_NONE;
     $edit = array();
@@ -486,11 +559,11 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->drupalPost($url, $edit, t('Save'));
 
     $match = array();
-    // Get comment ID
-     preg_match('/#comment-([^"]+)/', $this->getURL(), $match);
+    // Get comment ID.
+    preg_match('/#comment-([^"]+)/', $this->getURL(), $match);
 
     // Get comment.
-    if (!empty($match[1])) { // If true then attempting to find error message.
+    if (!empty($match[1])) {
       if ($subject) {
         $this->assertText($subject, 'Comment subject posted.');
       }
@@ -499,8 +572,11 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     }
 
     if (isset($match[1])) {
-      return array('id' => $match[1], 'subject' => $subject, 'comment' => $comment);
+      return array(
+        'id' => $match[1],
+        'subject' => $subject,
+        'comment' => $comment,
+      );
     }
   }
-
 }

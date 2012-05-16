@@ -2,7 +2,6 @@
 
 /**
  * @file
- *
  * Tokens for notifications.
  */
 
@@ -45,8 +44,7 @@ function node_notify_tokens($type, $tokens, array $data = array(), array $option
 
     case 'subscription':
       if (!empty($data['subscription']) && isset($tokens['unsubscribe-url'])) {
-        $replacements[$tokens['unsubscribe-url']] =
-          url('node_notify/unsubscribe/' . $data['subscription']->token, array('absolute' => TRUE));
+        $replacements[$tokens['unsubscribe-url']] = url('node_notify/unsubscribe/' . $data['subscription']->token, array('absolute' => TRUE));
       }
       break;
   }

@@ -2,7 +2,6 @@
 
 /**
  * @file
- *
  * Node Notify .install file.
  */
 
@@ -44,8 +43,9 @@ function node_notify_install() {
     ->fields(array('weight' => $weight + 1))
     ->execute();
 
-  drupal_set_message(t('<a href="!url">Configure</a> Node Notify to start using it.', array(
-    '!url' => url('admin/config/people/node_notify'),
+  $t = get_t();
+  drupal_set_message($t('<a href="!url">Configure</a> Node Notify to start using it.', array(
+    '!url' => check_plain(url('admin/config/people/node_notify')),
   )));
 }
 
