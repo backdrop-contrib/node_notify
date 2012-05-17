@@ -64,16 +64,18 @@ function node_notify_help($path, $arg) {
 function node_notify_permission() {
   return array(
     'administer node notify' => array(
-      'title' => 'Administer Node Notify',
-      'description' => 'Change global Node Notify settings.',
+      'title' => t('Administer Node Notify'),
+      'description' => t('Change global Node Notify settings.'),
     ),
     'administer node subscriptions' => array(
-      'title' => 'Administer node subscriptions',
-      'description' => 'View and edit node subscriptions.',
+      'title' => t('Administer node subscriptions'),
+      'description' => t('View and edit node subscriptions.'),
+      'restrict access' => TRUE,
+      'warning' => t('Trusted user will be able to see email addresses.'),
     ),
     'subscribe to node' => array(
-      'title' => 'Subscribe to node notifications',
-      'description' => 'Subscribe to receive notifications about new node comments.',
+      'title' => t('Subscribe to node notifications'),
+      'description' => t('Subscribe to receive notifications about new node comments.'),
     ),
   );
 }

@@ -32,7 +32,7 @@ function node_notify_requirements($phase) {
 function node_notify_install() {
   $t = get_t();
   drupal_set_message($t('<a href="!url">Configure</a> Node Notify to start using it.', array(
-    '!url' => check_plain(url('admin/config/people/node_notify')),
+    '!url' => url('admin/config/people/node_notify'),
   )));
 }
 
@@ -40,7 +40,13 @@ function node_notify_install() {
  * Implements hook_install().
  */
 function node_notify_uninstall() {
-  db_delete('variable')->condition('name', 'node_notify%', 'LIKE')->execute();
+  $variables = db_select('variable', 'v')
+    ->fields('v', array('name'))
+    ->condition('name', 'node_notify%', 'LIKE')
+    ->execute();
+  foreach ($variables as $var) {
+    variable_del($var->name);
+  }
 }
 
 /**
