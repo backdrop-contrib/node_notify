@@ -45,17 +45,17 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
 
     $permissions += array(
       100 => 'subscribe to node',
-      'post comments',
-      'skip comment approval',
-      'subscribe to comments',
+      101 => 'post comments',
+      102 => 'skip comment approval',
+      103 => 'subscribe to comments',
     );
     $this->privileged = $this->drupalCreateUser($permissions);
 
     $permissions += array(
       200 => 'administer node notify',
-      'administer node subscriptions',
-      "edit any $type content",
-      "delete any $type content",
+      201 => 'administer node subscriptions',
+      202 => "edit any $type content",
+      203 => "delete any $type content",
     );
     $this->admin = $this->drupalCreateUser($permissions);
 
@@ -450,8 +450,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
   }
 
   /**
-   * Issue #3: display no subscription widget when node is authored by
-   * anonymous user.
+   * Display no subscription widget when node is authored by anonymous user.
    */
   protected function testNodeNotifyIssue3() {
     $type = $this->type->type;

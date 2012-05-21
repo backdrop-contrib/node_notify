@@ -227,8 +227,7 @@ function node_notify_user_access($account) {
 }
 
 /**
- * Page callback to subscribe current user to a given node. Displays form for
- * an anonymous user.
+ * Subscription page callback.
  */
 function node_notify_subscribe_page($node) {
   if (user_is_logged_in()) {
@@ -390,8 +389,7 @@ function node_notify_user_subscriptions_page($account) {
 }
 
 /**
- * Page callback to disable or enable subscriptions by $sid for a given
- * $account.
+ * Page callback to enable/disable subscription.
  */
 function node_notify_user_enable_subscription_page($account, $sid, $enable = TRUE) {
   db_update('node_notify_subscription')
@@ -733,7 +731,7 @@ function node_notify_cron() {
  */
 function node_notify_subscribe($nid, $uid, $email = '', $enabled = TRUE) {
   if ($uid > 0) {
-     // Make sure email is empty for registered user.
+    // Make sure email is empty for registered user.
     $email = '';
   }
   $sid = db_select('node_notify_subscription', 's')
@@ -828,6 +826,8 @@ function node_notify_mail($key, &$message, $params) {
 }
 
 /**
+ * Check Comment Notify actions.
+ *
  * Check if comment will trigger Comment Notify notification for a given
  * subscriber.
  *
@@ -989,7 +989,9 @@ function node_notify_send_notification($subscription, $notification, $comment) {
 }
 
 /**
- * Check subscriptions affected by $comment and send notifications if
+ * Send notifications triggered by comment.
+ *
+ * Checks subscriptions affected by $comment and sends notifications if
  * necessary.
  *
  * @param object $comment
