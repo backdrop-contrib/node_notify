@@ -84,3 +84,6 @@ Contact
 
 Module was developed by CDLC (cdlc.dk). Current maintainer is
 donatas@cdlc.lt.
+
+Center for Digital Pædagogik (cfdp.dk) sponsored development of this
+module.
