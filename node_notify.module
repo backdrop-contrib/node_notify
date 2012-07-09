@@ -447,7 +447,7 @@ function node_notify_cron() {
 
   db_delete('node_notify_subscription')
     ->condition('subscribed_on', $expire, '<=')
-    ->condition('enabled', 1)
+    ->condition('enabled', 0)
     ->execute();
 
   db_query(

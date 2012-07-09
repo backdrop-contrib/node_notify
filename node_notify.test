@@ -43,20 +43,18 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
 
     $this->unprivileged = $this->drupalCreateUser($permissions);
 
-    $permissions += array(
-      100 => 'subscribe to node',
-      101 => 'post comments',
-      102 => 'skip comment approval',
-      103 => 'subscribe to comments',
-    );
+    $permissions[] = 'subscribe to node';
+    $permissions[] = 'access comments';
+    $permissions[] = 'post comments';
+    $permissions[] = 'skip comment approval';
+    $permissions[] = 'subscribe to comments';
     $this->privileged = $this->drupalCreateUser($permissions);
 
-    $permissions += array(
-      200 => 'administer node notify',
-      201 => 'administer node subscriptions',
-      202 => "edit any $type content",
-      203 => "delete any $type content",
-    );
+    $permissions[] = 'administer node notify';
+    $permissions[] = 'administer node subscriptions';
+    $permissions[] = "edit any $type content";
+    $permissions[] = "delete any $type content";
+    $permissions[] = 'administer comments';
     $this->admin = $this->drupalCreateUser($permissions);
 
     $this->node = $this->drupalCreateNode(array(
@@ -273,6 +271,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    *
    * - Denied when anonymous has no 'subscribe to node' permission.
    * - Skipped when comment and node author is the same.
+   * - Postponed until comment is published.
    * - Sent to anonymous with right permissions.
    */
   protected function testNodeNotifyNotifications() {
@@ -295,9 +294,27 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $note = node_notify_get_notification($data['id'], $nid, $this->privileged->uid);
     $this->assertTrue($note->notified == NODE_NOTIFY_SKIPPED, 'Notification skipped -- subscriber is commenter.');
 
-    variable_set('comment_anonymous_' . $type, '1');
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('post comments', 'skip comment approval'));
     $this->drupalLogout();
+    variable_set('comment_anonymous_' . $type, '1');
+
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('post comments'));
+    $this->drupalGet("node/$nid");
+    $data = $this->postComment($this->node, $this->randomName(), $this->randomName(), array('mail' => $email, 'name' => $this->randomName()), NULL, FALSE);
+    $notification = node_notify_get_notification($data['id'], $nid, 0, $email);
+    $this->assertFalse((bool) $notification, 'Notification does not exist -- comment is not published.');
+
+    $this->drupalLogin($this->admin);
+    // $this->drupalGet('admin/content/comment/approval');
+    $this->drupalPost('admin/content/comment/approval', array(
+      'comments[' . $data['id'] . ']' => TRUE,
+      'operation' => 'publish',
+    ), t('Update'));
+    $this->drupalLogout();
+
+    $notification = node_notify_get_notification($data['id'], $nid, 0, $email);
+    $this->assertTrue((bool) $notification, 'Notification exists -- comment was published.');
+
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('skip comment approval'));
     $this->drupalGet("node/$nid");
     $data = $this->postComment($this->node, $this->randomName(), $this->randomName(), array('mail' => $email, 'name' => $this->randomName()));
     $notification = node_notify_get_notification($data['id'], $nid, 0, $email);
@@ -474,6 +491,70 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     );
   }
 
+  /**
+   * Cron clean up of expired notifications.
+   */
+  protected function testNodeNotifyCron() {
+    $this->enableContentType($this->type);
+
+    node_notify_subscribe($this->node->nid, $this->privileged->uid);
+    node_notify_cron();
+    $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 1, 'Subscription exists.');
+
+    variable_set('node_notify_expires', '+1 day');
+    node_notify_cron();
+    $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 1, 'Subscription still exists - cron not enabled.');
+
+    variable_set('node_notify_cron', TRUE);
+    node_notify_cron();
+    $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 1, 'Subscription still exists - subscription active.');
+
+    $this->drupalLogin($this->privileged);
+    $this->postComment($this->node, $this->randomName(), $this->randomName());
+    $count = db_select('node_notify_notification')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 1, 'Notification created.');
+
+    node_notify_unsubscribe($this->node->nid, $this->privileged->uid);
+    node_notify_cron();
+    $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 0, 'Subscription removed.');
+    $count = db_select('node_notify_notification')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 0, 'Notification removed.');
+  }
+
+  /**
+   * Remove subscription when node or user is removed.
+   */
+  protected function testNodeNotifyUserAndNodeHooks() {
+    $this->enableContentType($this->type);
+    node_notify_subscribe($this->node->nid, $this->unprivileged->uid);
+
+    $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 1, 'Subscription exists.');
+
+    user_delete($this->unprivileged->uid);
+    $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 0, 'Subscription removed.');
+
+    node_notify_subscribe($this->node->nid, $this->privileged->uid);
+    $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 1, 'Another subscription created.');
+
+    $this->drupalLogin($this->privileged);
+    $this->postComment($this->node, 'Subject', 'Comment body');
+    $count = db_select('node_notify_notification')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 1, 'Notification exists.');
+
+    node_delete($this->node->nid);
+    $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 0, 'Another subscription removed.');
+
+    $count = db_select('node_notify_notification')->countQuery()->execute()->fetchColumn();
+    $this->assertTrue($count == 0, 'Notification removed.');
+  }
 
   /**
    * Generate random email address with example.com as domain part.
@@ -540,7 +621,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    *   If comment was posted, associative array with id, subject, and comment
    *   keys.
    */
-  function postComment($node, $subject, $comment, $notify = NULL, $contact = NULL) {
+  function postComment($node, $subject, $comment, $notify = NULL, $contact = NULL, $assertCommentVisible = TRUE) {
     $langcode = LANGUAGE_NONE;
     $edit = array();
     $edit['subject'] = $subject;
@@ -563,10 +644,12 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
 
     // Get comment.
     if (!empty($match[1])) {
-      if ($subject) {
-        $this->assertText($subject, 'Comment subject posted.');
+      if ($assertCommentVisible) {
+        if ($subject) {
+          $this->assertText($subject, 'Comment subject posted.');
+        }
+        $this->assertText($comment, 'Comment body posted.');
       }
-      $this->assertText($comment, 'Comment body posted.');
       $this->assertTrue((!empty($match) && !empty($match[1])), t('Comment id found.'));
     }
 
