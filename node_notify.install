@@ -31,9 +31,16 @@ function node_notify_requirements($phase) {
  */
 function node_notify_install() {
   $t = get_t();
-  drupal_set_message($t('<a href="!url">Configure</a> Node Notify to start using it.', array(
-    '!url' => url('admin/config/people/node_notify'),
-  )));
+  if (PHP_SAPI == "cli") {
+    drupal_set_message($t('Configure Node Notify at !url to start using it.', array(
+      '!url' => url('admin/config/people/node_notify', array('absolute' => TRUE)),
+    )));
+  }
+  else {
+    drupal_set_message($t('<a href="!url">Configure</a> Node Notify to start using it.', array(
+      '!url' => url('admin/config/people/node_notify'),
+    )));
+  }
 }
 
 /**
