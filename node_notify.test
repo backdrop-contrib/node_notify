@@ -266,6 +266,28 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
   }
 
   /**
+   * Test that "ticked by default" feature works.
+   */
+  protected function testNodeNotifyNodeFormDefaultValue() {
+    $this->enableContentType($this->type);
+    $this->setDefaltValueForType($this->type, FALSE);
+
+    $this->drupalLogin($this->privileged);
+    $this->drupalGet('node/add/' . $this->type->type);
+    $this->assertFieldByXpath(
+      "//input[@type='checkbox' and @id='edit-node-notify-subscribe' and not(@checked='checked')]", NULL,
+      'Subscription checkbox not checked.'
+    );
+
+    $this->setDefaltValueForType($this->type, TRUE);
+    $this->drupalGet('node/add/' . $this->type->type);
+    $this->assertFieldByXpath(
+      "//input[@type='checkbox' and @id='edit-node-notify-subscribe' and @checked='checked']", NULL,
+      'Subscription checkbox checked by default.'
+    );
+  }
+
+  /**
    * Node Notify notifications.
    *
    * - Denied when anonymous has no 'subscribe to node' permission.
@@ -627,9 +649,23 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    *   Content type object.
    */
   protected function enableContentType($type) {
-    variable_set('node_notify_enabled_types', array(
-      $type->type => $type->type,
-    ));
+    $values = variable_get('node_notify_enabled_types', array());
+    $values[$type->type] = $type->type;
+    variable_set('node_notify_enabled_types', $values);
+  }
+
+  /**
+   * Set default value of subscription for content type.
+   *
+   * @param object $type
+   *   Content type object.
+   * @param bool $value
+   *   Default value.
+   */
+  protected function setDefaltValueForType($type, $value) {
+    $values = variable_get('node_notify_enabled_by_default', array());
+    $values[$type->type] = $value;
+    variable_set('node_notify_enabled_by_default', $values);
   }
 
   /**
