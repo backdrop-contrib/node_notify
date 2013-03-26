@@ -103,7 +103,6 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->drupalGet('node/add/' . $this->type->type);
     $this->assertNoPattern('/edit-node-notify-subscribe/', 'Node Notify disabled for anonymous user.');
 
-
     $this->drupalGet('node/' . $nid);
     $this->assertNoPattern("/node\/$nid\/subscribe/", 'No Subscribe link for anonymous user.');
 
@@ -163,7 +162,6 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->assertResponse(403, 'Forbidden for unprivileged user.');
 
     $this->drupalLogout();
-
 
     $this->drupalLogin($this->privileged);
 
@@ -621,7 +619,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    *   If comment was posted, associative array with id, subject, and comment
    *   keys.
    */
-  function postComment($node, $subject, $comment, $notify = NULL, $contact = NULL, $assertCommentVisible = TRUE) {
+  protected function postComment($node, $subject, $comment, $notify = NULL, $contact = NULL, $assert_comment_visible = TRUE) {
     $langcode = LANGUAGE_NONE;
     $edit = array();
     $edit['subject'] = $subject;
@@ -644,7 +642,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
 
     // Get comment.
     if (!empty($match[1])) {
-      if ($assertCommentVisible) {
+      if ($assert_comment_visible) {
         if ($subject) {
           $this->assertText($subject, 'Comment subject posted.');
         }

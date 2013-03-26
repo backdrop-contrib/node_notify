@@ -235,8 +235,8 @@ function node_notify_form_alter(&$form, &$form_state, $form_id) {
   }
 
   $node = $form['#node'];
-  $node->node_notify_subscribe = isset($node->node_notify_subscribe)
-    ? $node->node_notify_subscribe : NULL;
+  $node->node_notify_subscribe = isset($node->node_notify_subscribe) ?
+      $node->node_notify_subscribe : NULL;
 
   // Editing existing node.
   if (isset($node->nid)) {
