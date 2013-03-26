@@ -48,6 +48,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $permissions[] = 'post comments';
     $permissions[] = 'skip comment approval';
     $permissions[] = 'subscribe to comments';
+    $permissions[] = 'access user profiles';
     $this->privileged = $this->drupalCreateUser($permissions);
 
     $permissions[] = 'administer node notify';
@@ -552,6 +553,45 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
 
     $count = db_select('node_notify_notification')->countQuery()->execute()->fetchColumn();
     $this->assertTrue($count == 0, 'Notification removed.');
+  }
+
+  /**
+   * Test for issue #1950050.
+   */
+  protected function testNodeNotifyUserSubscriptionsTab() {
+    $testuser = $this->drupalCreateUser(array(
+      'access content',
+      'subscribe to node',
+    ));
+
+    $user_url = 'user/' . $testuser->uid;
+    $user_subscriptions = $user_url . '/subscriptions';
+
+    $this->drupalLogin($this->unprivileged);
+    $this->drupalGet($user_url);
+    $this->assertText(t('Access denied'), 'Access denied to user page');
+    $this->drupalGet($user_subscriptions);
+    $this->assertText(t('Access denied'), 'Access denied to user subscriptions');
+
+    $this->drupalLogout();
+    $this->drupalLogin($this->privileged);
+    $this->drupalGet($user_url);
+    $this->assertText(
+      $testuser->name,
+      'Access granted to user page for user with "access user profiles" permission.'
+    );
+    $this->drupalGet($user_subscriptions);
+    $this->assertText(
+      t('Access denied'),
+      'Access denied to user subscriptions for user with "access user profiles" permission.'
+    );
+
+    $this->drupalLogout();
+    $this->drupalLogin($this->admin);
+    $this->drupalGet($user_url);
+    $this->assertText($testuser->name, 'Access granted to user page');
+    $this->drupalGet($user_subscriptions);
+    $this->assertText(t('No subscriptions yet.'), 'Access granted to user subscriptions');
   }
 
   /**
