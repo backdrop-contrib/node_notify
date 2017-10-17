@@ -33,15 +33,20 @@ function node_notify_requirements($phase) {
 function node_notify_install() {
   $t = get_t();
   if (PHP_SAPI == "cli") {
-    drupal_set_message($t('Configure Node Notify at !url to start using it.', array(
+    backdrop_set_message($t('Configure Node Notify at !url to start using it.', array(
       '!url' => url('admin/config/people/node_notify', array('absolute' => TRUE)),
     )));
   }
   else {
-    drupal_set_message($t('<a href="!url">Configure</a> Node Notify to start using it.', array(
+    backdrop_set_message($t('<a href="!url">Configure</a> Node Notify to start using it.', array(
       '!url' => url('admin/config/people/node_notify'),
     )));
   }
+
+  $config = config('node_notify.settings');
+  $config->set('node_notify_template_subject', NODE_NOTIFY_DEFAULT_NOTIFICATION_SUBJECT);
+  $config->set('node_notify_template_body', NODE_NOTIFY_DEFAULT_NOTIFICATION_BODY);
+  $config->save();
 }
 
 /**
@@ -53,6 +58,7 @@ function node_notify_uninstall() {
     ->condition('name', 'node_notify%', 'LIKE')
     ->execute();
   foreach ($variables as $var) {
+    // TODO This variable was probably removed in Backdrop without replacement.
     variable_del($var->name);
   }
 }
@@ -117,10 +123,12 @@ function node_notify_schema() {
     ),
     'foreign keys' => array(
       'subscribed_node' => array(
-        'table' => 'node', 'columns' => array('nid' => 'nid'),
+        'table' => 'node',
+        'columns' => array('nid' => 'nid'),
       ),
       'subscribed_user' => array(
-        'table' => 'user', 'columns' => array('uid' => 'uid'),
+        'table' => 'user',
+        'columns' => array('uid' => 'uid'),
       ),
     ),
   );
@@ -163,4 +171,34 @@ function node_notify_schema() {
   );
 
   return $schema;
+}
+
+/**
+ * Implements hook_update_last_removed().
+ */
+function node_notify_update_last_removed() {
+  return;
+}
+
+/**
+ * Implements hook_update_N().
+ */
+function node_notify_update_1000() {
+  $config = config('node_notify .settings');
+  $config->set('node_notify_enabled_types', update_variable_get('node_notify_enabled_types', array()));
+  $config->set('node_notify_enabled_by_default', update_variable_get('node_notify_enabled_by_default', array()));
+  $config->set('node_notify_cron', update_variable_get('node_notify_cron', FALSE));
+  $config->set('node_notify_expires', update_variable_get('node_notify_expires', '-1 month'));
+  $config->set('node_notify_template_subject', update_variable_get('node_notify_template_subject', NODE_NOTIFY_DEFAULT_NOTIFICATION_SUBJECT));
+  $config->set('node_notify_template_body', update_variable_get('node_notify_template_body', NODE_NOTIFY_DEFAULT_NOTIFICATION_BODY));
+  $config->set('node_notify_log', update_variable_get('node_notify_log', FALSE));
+  $config->save();
+
+  update_variable_del('node_notify_enabled_types');
+  update_variable_del('node_notify_enabled_by_default');
+  update_variable_del('node_notify_cron');
+  update_variable_del('node_notify_expires');
+  update_variable_del('node_notify_template_subject');
+  update_variable_del('node_notify_template_body');
+  update_variable_del('node_notify_log');
 }

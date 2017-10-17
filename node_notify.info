@@ -1,11 +1,10 @@
 name = Node Notify
 description = Comment notifications for nodes for anonymous and registered users.
-core = 7.x
+backdrop = 1.x
+type = module
 
 configure = admin/config/people/node_notify
 
 dependencies[] = node
 dependencies[] = comment
-dependencies[] = token
 
-files[] = node_notify.test

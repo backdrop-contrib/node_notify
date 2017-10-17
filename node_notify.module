@@ -89,7 +89,7 @@ function node_notify_menu() {
   $items['admin/config/people/node_notify'] = array(
     'title' => 'Node notify',
     'description' => 'Configure Node Notify global settings.',
-    'page callback' => 'drupal_get_form',
+    'page callback' => 'backdrop_get_form',
     'page arguments' => array('node_notify_settings_form'),
     'access arguments' => array('administer node notify'),
     'file' => 'node_notify.admin.inc',
@@ -215,6 +215,16 @@ function node_notify_user_access($account) {
 }
 
 /**
+ * Implements hook_config_info().
+ */
+function node_notify_config_info() {
+  $prefixes['node_notify.settings'] = array(
+    'label' => t('Module name settings'),
+    'group' => t('Configuration'),
+  );
+}
+
+/**
  * Implements hook_form_alter().
  *
  * Creates subscription checkbox for registered users or textfield for
@@ -236,7 +246,7 @@ function node_notify_form_alter(&$form, &$form_state, $form_id) {
 
   $node = $form['#node'];
 
-  $default_values = variable_get('node_notify_enabled_by_default', array());
+  $default_values = config_get('node_notify.settings', 'node_notify_enabled_by_default');
   if (!isset($node->node_notify_subscribe)) {
     $node->node_notify_subscribe = isset($default_values[$node->type]) ? (bool) $default_values[$node->type] : FALSE;
   }
@@ -295,7 +305,7 @@ function node_notify_validate_email_address($element, &$form_state, $form) {
  *   Array of enabled types' machine names.
  */
 function node_notify_enabled_types() {
-  $enabled_types = variable_get('node_notify_enabled_types', array());
+  $enabled_types = config_get('node_notify.settings', 'node_notify_enabled_types');
   return array_keys(array_flip(array_filter($enabled_types)));
 }
 
@@ -371,7 +381,7 @@ function node_notify_node_update($node) {
 function node_notify_node_delete($node) {
   db_query(
     'DELETE FROM {node_notify_notification}
-      WHERE sid IN (SELECT sid FROM {node_notify_subscription} WHERE nid = :nid)',
+      WHERE sid IN (SELECT sid FROM {node_notify_subscription} WHERE nid = :nid)',  
     array(':nid' => $node->nid)
   );
   db_delete('node_notify_subscription')
@@ -443,7 +453,7 @@ function node_notify_comment_delete($comment) {
 function node_notify_user_delete($account) {
   db_query(
     'DELETE FROM {node_notify_notification}
-      WHERE sid IN (SELECT sid FROM {node_notify_subscription} WHERE uid = :uid)',
+      WHERE sid IN (SELECT sid FROM {node_notify_subscription} WHERE uid = :uid)',  
     array(':uid' => $account->uid)
   );
   db_delete('node_notify_subscription')
@@ -455,11 +465,12 @@ function node_notify_user_delete($account) {
  * Implements hook_cron().
  */
 function node_notify_cron() {
-  if (!variable_get('node_notify_cron', FALSE)) {
+  $config = config('node_notify.settings');
+  if (!$config->get('node_notify_cron')) {
     return;
   }
 
-  $expiration_time = variable_get('node_notify_expires', '-1 month');
+  $expiration_time = $config->get('node_notify_expires');
   $expire = strtotime($expiration_time);
 
   db_delete('node_notify_subscription')
@@ -504,9 +515,9 @@ function node_notify_subscribe($nid, $uid, $email = '', $enabled = TRUE) {
     db_update('node_notify_subscription')
       ->condition('sid', $sid)
       ->fields(array(
-        'enabled' => (int) $enabled,
-        'subscribed_on' => time(),
-      ))->execute();
+      'enabled' => (int) $enabled,
+      'subscribed_on' => time(),
+    ))->execute();
   }
   else {
     $fields = array(
@@ -519,7 +530,7 @@ function node_notify_subscribe($nid, $uid, $email = '', $enabled = TRUE) {
     );
 
     $seed = $nid . $uid . $email . mt_rand();
-    $fields['token'] = drupal_get_token($seed);
+    $fields['token'] = backdrop_get_token($seed);
     db_insert('node_notify_subscription')
       ->fields($fields)
       ->execute();
@@ -612,14 +623,14 @@ function _node_notify_processed_by_comment_notify($comment, $uid, $email) {
         WHERE c.nid = :nid
           AND c.status = :status
           AND cn.notify = :notify
-          AND ((u.uid = 0 AND c.mail = :mail) OR (u.uid = :uid AND u.uid > 0))',
+          AND ((u.uid = 0 AND c.mail = :mail) OR (u.uid = :uid AND u.uid > 0))',  
       array(
-        ':nid' => $comment->nid,
-        ':status' => COMMENT_PUBLISHED,
-        ':notify' => COMMENT_NOTIFY_NODE,
-        ':uid' => $uid,
-        ':mail' => $email,
-      ))
+      ':nid' => $comment->nid,
+      ':status' => COMMENT_PUBLISHED,
+      ':notify' => COMMENT_NOTIFY_NODE,
+      ':uid' => $uid,
+      ':mail' => $email,
+    ))
       ->fetchColumn();
     if ($exists) {
       return TRUE;
@@ -633,11 +644,11 @@ function _node_notify_processed_by_comment_notify($comment, $uid, $email) {
      INNER JOIN {node} n ON cnu.uid = n.uid
           WHERE cnu.uid = :uid
             AND cnu.node_notify = 1
-            AND n.nid = :nid',
+            AND n.nid = :nid',  
         array(
-          ':uid' => $uid,
-          ':nid' => $comment->nid,
-        ))
+        ':uid' => $uid,
+        ':nid' => $comment->nid,
+      ))
         ->fetchColumn();
       if ($exists) {
         return TRUE;
@@ -654,19 +665,19 @@ function _node_notify_processed_by_comment_notify($comment, $uid, $email) {
           AND c.cid <> :cid
           AND c.status = :status
           AND cn.notify = :notify
-          AND ((u.uid = 0 AND c.mail = :mail) OR u.uid = :uid)',
+          AND ((u.uid = 0 AND c.mail = :mail) OR u.uid = :uid)',  
       array(
-        ':cid' => $comment->cid,
-        ':nid' => $comment->nid,
-        ':status' => COMMENT_PUBLISHED,
-        ':notify' => COMMENT_NOTIFY_COMMENT,
-        ':uid' => $uid,
-        ':mail' => $email,
-      ));
+      ':cid' => $comment->cid,
+      ':nid' => $comment->nid,
+      ':status' => COMMENT_PUBLISHED,
+      ':notify' => COMMENT_NOTIFY_COMMENT,
+      ':uid' => $uid,
+      ':mail' => $email,
+    ));
     foreach ($result as $record) {
-      $len = drupal_strlen($record->thread) - 1;
-      $thread = drupal_substr($comment->thread, 0, $len);
-      $record->thread = drupal_substr($record->thread, 0, $len);
+      $len = backdrop_strlen($record->thread) - 1;
+      $thread = backdrop_substr($comment->thread, 0, $len);
+      $record->thread = backdrop_substr($record->thread, 0, $len);
       if ($thread == $record->thread) {
         return TRUE;
       }
@@ -687,6 +698,7 @@ function _node_notify_processed_by_comment_notify($comment, $uid, $email) {
  *   Comment to check against.
  */
 function node_notify_send_notification($subscription, $notification, $comment) {
+  $config = config('node_notify.settings');
   $notified = NODE_NOTIFY_PENDING;
   $message = NULL;
 
@@ -699,19 +711,20 @@ function node_notify_send_notification($subscription, $notification, $comment) {
     // Send notification if subscriber is not comment author.
     if ($subscription->uid != $comment->uid || $not_author) {
 
-      $subscriber = $subscription->uid ? user_load($subscription->uid) : drupal_anonymous_user();
+      $subscriber = $subscription->uid ? user_load($subscription->uid) : backdrop_anonymous_user();
+  //dpm($subscriber);
       $node = node_load($comment->nid);
 
       // Last check before sending.
       if (node_access('view', $node, $subscriber) && user_access('subscribe to node', $subscriber)) {
 
-        $subject = variable_get('node_notify_template_subject', NODE_NOTIFY_DEFAULT_NOTIFICATION_SUBJECT);
-        $body = variable_get('node_notify_template_body', NODE_NOTIFY_DEFAULT_NOTIFICATION_BODY);
+        $subject = $config->get('node_notify_template_subject');
+        $body = $config->get('node_notify_template_body');
 
         $mail = $subscriber->uid ? $subscriber->mail : $subscription->email;
         $language = user_preferred_language($subscriber);
 
-        $message = drupal_mail('node_notify', 'comment_notification', $mail, $language, array(
+        $message = backdrop_mail('node_notify', 'comment_notification', $mail, $language, array(
           'subject' => token_replace($subject, array(
             'comment' => $comment,
             'subscriber' => $subscriber,
@@ -793,6 +806,7 @@ function node_notify_send_notifications($comment) {
         $notification = (object) $notification;
       }
       if (NODE_NOTIFY_PENDING == $notification->notified) {
+      dpm($subscription);
         node_notify_send_notification($subscription, $notification, $comment);
       }
     }
@@ -819,8 +833,8 @@ function node_notify_get_notification($cid, $nid, $uid, $email = '') {
     ->fields('n', array('sid', 'cid', 'notified'))
     ->condition('cid', $cid);
   $query->innerJoin(
-    'node_notify_subscription', 's',
-    '(s.sid = n.sid AND s.nid = :nid AND s.uid = :uid AND s.email = :email)',
+    'node_notify_subscription', 's',  
+    '(s.sid = n.sid AND s.nid = :nid AND s.uid = :uid AND s.email = :email)',  
     array(':nid' => $nid, ':uid' => $uid, ':email' => $email)
   );
   return $query->execute()->fetchObject();
@@ -839,7 +853,7 @@ function node_notify_get_notification($cid, $nid, $uid, $email = '') {
  *   Email message if notification was sent. NULL otherwise.
  */
 function node_notify_log($subscription, $notification, $comment, $message = NULL) {
-  if (!variable_get('node_notify_log', FALSE)) {
+  if (!config_get('node_notify.settings', 'node_notify_log')) {
     return;
   }
 
@@ -889,12 +903,20 @@ function node_notify_log($subscription, $notification, $comment, $message = NULL
  * Generates a token for subscription / unsubscription.
  */
 function node_notify_get_token($op, $nid) {
-  return drupal_get_token('node_notify_' . $op . '_' . $nid);
+  return backdrop_get_token('node_notify_' . $op . '_' . $nid);
 }
 
 /**
  * Checks whether subscription token is valid.
  */
 function node_notify_check_token($op, $nid) {
-  return isset($_GET['token']) && drupal_valid_token($_GET['token'], 'node_notify_' . $op . '_' . $nid);
+  return isset($_GET['token']) && backdrop_valid_token($_GET['token'], 'node_notify_' . $op . '_' . $nid);
+}
+
+/**
+ * Implements hook_autoload_info().
+ */
+function node_notify_autoload_info() {
+  return array(
+  );
 }

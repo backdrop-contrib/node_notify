@@ -19,10 +19,10 @@ function node_notify_disable_page($token) {
       ->condition('sid', $record->sid)
       ->fields(array('enabled' => 0))
       ->execute();
-    drupal_set_message(t('Subscription canceled.'));
+    backdrop_set_message(t('Subscription canceled.'));
   }
   else {
-    drupal_set_message(t('Sorry, there was a problem unsubscribing from notifications.'));
+    backdrop_set_message(t('Sorry, there was a problem unsubscribing from notifications.'));
   }
   return ' ';
 }
@@ -32,15 +32,15 @@ function node_notify_disable_page($token) {
  */
 function node_notify_subscribe_page($node) {
   if (!user_is_logged_in()) {
-    return drupal_get_form('node_notify_subscribe_form', $node);
+    return backdrop_get_form('node_notify_subscribe_form', $node);
   }
   elseif (!node_notify_check_token('subscribe', $node->nid)) {
     return MENU_ACCESS_DENIED;
   }
   else {
     node_notify_subscribe($node->nid, $GLOBALS['user']->uid);
-    drupal_set_message(t('Subscribed to %title.', array('%title' => $node->title)));
-    drupal_goto('node/' . $node->nid);
+    backdrop_set_message(t('Subscribed to %title.', array('%title' => $node->title)));
+    backdrop_goto('node/' . $node->nid);
   }
 }
 
@@ -75,8 +75,8 @@ function node_notify_subscribe_form_submit($form, &$form_state) {
   $email = $form_state['values']['email'];
   $node = $form_state['node_notify']['node'];
   node_notify_subscribe($node->nid, 0, $email);
-  drupal_set_message(t('Subscribed to %title.', array('%title' => $node->title)));
-  drupal_goto('node/' . $node->nid);
+  backdrop_set_message(t('Subscribed to %title.', array('%title' => $node->title)));
+  backdrop_goto('node/' . $node->nid);
 }
 
 /**
@@ -85,8 +85,8 @@ function node_notify_subscribe_form_submit($form, &$form_state) {
 function node_notify_unsubscribe_page($node) {
   if (user_is_logged_in() && node_notify_check_token('unsubscribe', $node->nid)) {
     node_notify_unsubscribe($node->nid, $GLOBALS['user']->uid);
-    drupal_set_message(t('Unsubscribed from %title.', array('%title' => $node->title)));
-    drupal_goto('node/' . $node->nid);
+    backdrop_set_message(t('Unsubscribed from %title.', array('%title' => $node->title)));
+    backdrop_goto('node/' . $node->nid);
   }
   else {
     return MENU_ACCESS_DENIED;
@@ -98,9 +98,19 @@ function node_notify_unsubscribe_page($node) {
  */
 function node_notify_node_subscriptions_page($node) {
   $header = array(
-    array('data' => t('User'), 'field' => 'name'),
-    array('data' => t('Email'), 'field' => 'email'),
-    array('data' => t('Date'), 'field' => 'subscribed_on', 'sort' => 'desc'),
+    array(
+      'data' => t('User'),
+      'field' => 'name',
+    ),
+    array(
+      'data' => t('Email'),
+      'field' => 'email',
+    ),
+    array(
+      'data' => t('Date'),
+      'field' => 'subscribed_on',
+      'sort' => 'desc',
+    ),
     '',
   );
 
@@ -119,10 +129,11 @@ function node_notify_node_subscriptions_page($node) {
     $url = 'node/' . $node->nid . '/subscriptions/' . $record->sid;
     $rows[] = array(
       $record->uid ? l($record->name, 'user/' . $record->uid) : NULL,
-      check_plain($record->email), format_date($record->subscribed_on),
+      check_plain($record->email),
+      format_date($record->subscribed_on),
       $record->enabled ?
-      l(t('Disable'), $url . '/disable', array('query' => drupal_get_destination())) :
-      l(t('Enable'), $url . '/enable', array('query' => drupal_get_destination())),
+      l(t('Disable'), $url . '/disable', array('query' => backdrop_get_destination())) :
+      l(t('Enable'), $url . '/enable', array('query' => backdrop_get_destination())),
     );
   }
 
@@ -145,7 +156,7 @@ function node_notify_node_enable_subscription_page($node, $sid, $enable = TRUE) 
     ->fields(array('enabled' => (int) $enable))
     ->execute();
 
-  drupal_goto(drupal_get_destination());
+  backdrop_goto(backdrop_get_destination());
 }
 
 /**
@@ -153,8 +164,16 @@ function node_notify_node_enable_subscription_page($node, $sid, $enable = TRUE) 
  */
 function node_notify_user_subscriptions_page($account) {
   $header = array(
-    array('data' => t('Title'), 'field' => 'title', 'sort' => 'asc'),
-    array('data' => t('Date'), 'field' => 'subscribed_on', 'sort' => 'desc'),
+    array(
+      'data' => t('Title'),
+      'field' => 'title',
+      'sort' => 'asc',
+    ),
+    array(
+      'data' => t('Date'),
+      'field' => 'subscribed_on',
+      'sort' => 'desc',
+    ),
     '',
   );
 
@@ -175,8 +194,8 @@ function node_notify_user_subscriptions_page($account) {
       l($record->title, 'node/' . $record->nid),
       format_date($record->subscribed_on),
       $record->enabled ?
-      l(t('Disable'), $url . '/disable', array('query' => drupal_get_destination())) :
-      l(t('Enable'), $url . '/enable', array('query' => drupal_get_destination())),
+      l(t('Disable'), $url . '/disable', array('query' => backdrop_get_destination())) :
+      l(t('Enable'), $url . '/enable', array('query' => backdrop_get_destination())),
     );
   }
 
@@ -200,5 +219,5 @@ function node_notify_user_enable_subscription_page($account, $sid, $enable = TRU
     ->fields(array('enabled' => (int) $enable))
     ->execute();
 
-  drupal_goto(drupal_get_destination());
+  backdrop_goto(backdrop_get_destination());
 }
