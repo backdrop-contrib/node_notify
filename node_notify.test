@@ -5,7 +5,7 @@
  * Test Node Notify functionality and integration with Comment Notify.
  */
 
-class NodeNotifyTestCase extends DrupalWebTestCase {
+class NodeNotifyTestCase extends BackdropWebTestCase {
 
   protected $type = NULL;
   protected $node = NULL;
@@ -15,21 +15,10 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
   protected $admin = NULL;
 
   /**
-   * Description.
-   */
-  public static function getInfo() {
-    return array(
-      'name' => t('Node Notify tests'),
-      'description' => t('Test Node Notify behaviour and integration with Comment Notify.'),
-      'group' => t('Node Notify'),
-    );
-  }
-
-  /**
    * Set up state before testing.
    */
   protected function setUp() {
-    parent::setUp('node_notify', 'comment_notify', 'dblog');
+    parent::setUp('node_notify', 'dblog');
 
     $this->type = $this->createContentType();
 
@@ -41,24 +30,23 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
       "delete own $type content",
     );
 
-    $this->unprivileged = $this->drupalCreateUser($permissions);
+    $this->unprivileged = $this->backdropCreateUser($permissions);
 
     $permissions[] = 'subscribe to node';
     $permissions[] = 'access comments';
     $permissions[] = 'post comments';
     $permissions[] = 'skip comment approval';
-    $permissions[] = 'subscribe to comments';
     $permissions[] = 'access user profiles';
-    $this->privileged = $this->drupalCreateUser($permissions);
+    $this->privileged = $this->backdropCreateUser($permissions);
 
     $permissions[] = 'administer node notify';
     $permissions[] = 'administer node subscriptions';
     $permissions[] = "edit any $type content";
     $permissions[] = "delete any $type content";
     $permissions[] = 'administer comments';
-    $this->admin = $this->drupalCreateUser($permissions);
+    $this->admin = $this->backdropCreateUser($permissions);
 
-    $this->node = $this->drupalCreateNode(array(
+    $this->node = $this->backdropCreateNode(array(
       'type' => $this->type->type,
       'comment' => COMMENT_NODE_OPEN,
       'uid' => $this->privileged->uid,
@@ -73,17 +61,17 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    * subscription widgets on node forms accordingly.
    */
   protected function testNodeNotifyEnabledTypes() {
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
 
     $this->disableContentTypes();
-    $this->drupalGet('node/add/' . $this->type->type);
+    $this->backdropGet('node/add/' . $this->type->type);
     $this->assertNoPattern('/edit-node-notify-subscribe/', 'Node Notify disabled for content type.');
 
     $this->enableContentType($this->type);
-    $this->drupalGet('node/add/' . $this->type->type);
+    $this->backdropGet('node/add/' . $this->type->type);
     $this->assertPattern('/edit-node-notify-subscribe/', 'Node Notify enabled for content type.');
 
-    $this->drupalLogout();
+    $this->backdropLogout();
   }
 
   /**
@@ -96,26 +84,27 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
   protected function testNodeNotifyAnonymous() {
     $type = $this->type->type;
     $nid = $this->node->nid;
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array("create $type content"));
+    user_role_grant_permissions(BACKDROP_ANONYMOUS_ROLE, array("create $type content"));
 
-    $this->drupalLogout();
+    $this->backdropLogout();
     $this->enableContentType($this->type);
 
-    $this->drupalGet('node/add/' . $this->type->type);
+    $this->backdropGet('node/add/' . $this->type->type);
     $this->assertNoPattern('/edit-node-notify-subscribe/', 'Node Notify disabled for anonymous user.');
 
-    $this->drupalGet('node/' . $nid);
+    $this->backdropGet('node/' . $nid);
     $this->assertNoPattern("/node\/$nid\/subscribe/", 'No Subscribe link for anonymous user.');
 
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('subscribe to node'));
+    user_role_grant_permissions(BACKDROP_ANONYMOUS_ROLE, array('subscribe to node'));
+    cache_clear_all();
 
-    $this->drupalGet('node/add/' . $this->type->type);
+    $this->backdropGet('node/add/' . $this->type->type);
     $this->assertPattern('/edit-node-notify-subscribe/', 'Node Notify enabled for anonymous user.');
 
-    $this->drupalGet('node/' . $nid);
+    $this->backdropGet('node/' . $nid);
     $this->assertPattern("/node\/$nid\/subscribe/", 'Subscribe link is displayed for anonymous user.');
 
-    user_role_revoke_permissions(DRUPAL_ANONYMOUS_RID, array(
+    user_role_revoke_permissions(BACKDROP_ANONYMOUS_ROLE, array(
       'subscribe to node', "create $type content",
     ));
   }
@@ -132,97 +121,98 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $email = $this->getRandomEmail();
     $this->enableContentType($this->type);
 
-    $this->drupalLogout();
+    $this->backdropLogout();
 
-    $this->drupalGet("node/$nid/subscribe", array('query' => array('token' => $this->drupalGetToken("node_notify_subscribe_$nid"))));
+    $this->backdropGet("node/$nid/subscribe", array('query' => array('token' => $this->backdropGetToken("node_notify_subscribe_$nid"))));
     $this->assertResponse(403, 'Forbidden');
 
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('subscribe to node'));
+    user_role_grant_permissions(BACKDROP_ANONYMOUS_ROLE, array('subscribe to node'));
+    cache_clear_all();
 
-    $this->drupalLogin($this->admin);
-    $this->drupalLogout();
+    $this->backdropLogin($this->admin);
+    $this->backdropLogout();
 
-    $this->drupalGet("node/$nid/subscribe", array('query' => array('token' => $this->drupalGetToken("node_notify_subscribe_$nid"))));
+    $this->backdropGet("node/$nid/subscribe", array('query' => array('token' => $this->backdropGetToken("node_notify_subscribe_$nid"))));
     $this->assertResponse(200, 'Accessible');
     $this->assertPattern('/node-notify-subscribe-form/', 'Subscription form is displayed for anonymous user.');
 
     $edit['email'] = $email;
-    $this->drupalPost(NULL, $edit, t('Subscribe'));
+    $this->backdropPost(NULL, $edit, t('Subscribe'));
     $this->assertUrl("node/$nid", array(), 'Redirected to node page.');
     $this->assertTrue(node_notify_is_subscribed($nid, 0, $email), 'Anonymous user subscribed with node/N/subscribe form.');
 
-    $this->drupalGet("node/$nid/unsubscribe", array('query' => array('token' => $this->drupalGetToken("node_notify_unsubscribe_$nid"))));
+    $this->backdropGet("node/$nid/unsubscribe", array('query' => array('token' => $this->backdropGetToken("node_notify_unsubscribe_$nid"))));
     $this->assertResponse(403, 'Anonymous user is not allowed to access node/N/unsubscribe URL.');
 
-    user_role_revoke_permissions(DRUPAL_ANONYMOUS_RID, array('subscribe to node'));
+    user_role_revoke_permissions(BACKDROP_ANONYMOUS_ROLE, array('subscribe to node'));
 
-    $this->drupalLogin($this->unprivileged);
+    $this->backdropLogin($this->unprivileged);
 
-    $this->drupalGet("node/$nid/subscribe", array('query' => array('token' => $this->drupalGetToken("node_notify_subscribe_$nid"))));
+    $this->backdropGet("node/$nid/subscribe", array('query' => array('token' => $this->backdropGetToken("node_notify_subscribe_$nid"))));
     $this->assertResponse(403, 'Forbidden for unprivileged user.');
 
-    $this->drupalLogout();
+    $this->backdropLogout();
 
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
 
-    $this->drupalGet("node/$nid/subscribe");
+    $this->backdropGet("node/$nid/subscribe");
     $this->assertResponse(403, 'Forbidden to privileged user without token.');
 
-    $this->drupalLogout();
+    $this->backdropLogout();
 
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
 
-    $this->drupalGet("node/$nid/subscribe", array('query' => array('token' => $this->drupalGetToken("node_notify_subscribe_{$nid}_"))));
+    $this->backdropGet("node/$nid/subscribe", array('query' => array('token' => $this->backdropGetToken("node_notify_subscribe_{$nid}_"))));
     $this->assertResponse(403, 'Forbidden to privileged user with wrong token.');
 
-    $this->drupalLogout();
+    $this->backdropLogout();
 
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
 
-    $this->drupalGet("node/$nid/subscribe", array('query' => array('token' => $this->drupalGetToken("node_notify_subscribe_$nid"))));
+    $this->backdropGet("node/$nid/subscribe", array('query' => array('token' => $this->backdropGetToken("node_notify_subscribe_$nid"))));
     $this->assertResponse(200, 'Accessible to privileged user.');
 
-    $this->drupalLogout();
+    $this->backdropLogout();
 
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
 
-    $this->drupalGet("node/$nid/subscribe", array('query' => array('token' => $this->drupalGetToken("node_notify_subscribe_$nid"))));
+    $this->backdropGet("node/$nid/subscribe", array('query' => array('token' => $this->backdropGetToken("node_notify_subscribe_$nid"))));
     $this->assertResponse(200, 'Accessible');
     $this->assertNoPattern('/node-notify-subscribe-form/', 'Subscription form is not displayed for privileged user.');
     $this->assertUrl("node/$nid", array(), 'Privileged user should be redirected back to node page.');
     $this->assertTrue(node_notify_is_subscribed($nid, $this->privileged->uid), 'Privileged user is subscribed.');
 
-    $this->drupalLogout();
+    $this->backdropLogout();
 
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
 
-    $this->drupalGet("node/$nid/unsubscribe");
+    $this->backdropGet("node/$nid/unsubscribe");
     $this->assertResponse(403, 'Forbidden to privileged user without token.');
 
-    $this->drupalLogout();
+    $this->backdropLogout();
 
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
 
-    $this->drupalGet("node/$nid/unsubscribe", array('query' => array('token' => $this->drupalGetToken("node_notify_subscribe_{$nid}_"))));
+    $this->backdropGet("node/$nid/unsubscribe", array('query' => array('token' => $this->backdropGetToken("node_notify_subscribe_{$nid}_"))));
     $this->assertResponse(403, 'Forbidden to privileged user with wrong token.');
 
-    $this->drupalLogout();
+    $this->backdropLogout();
 
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
 
-    $this->drupalGet("node/$nid/unsubscribe", array('query' => array('token' => $this->drupalGetToken("node_notify_unsubscribe_$nid"))));
+    $this->backdropGet("node/$nid/unsubscribe", array('query' => array('token' => $this->backdropGetToken("node_notify_unsubscribe_$nid"))));
     $this->assertResponse(200, 'Accessible to privileged user.');
 
-    $this->drupalLogout();
+    $this->backdropLogout();
 
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
 
-    $this->drupalGet("node/$nid/unsubscribe", array('query' => array('token' => $this->drupalGetToken("node_notify_unsubscribe_$nid"))));
+    $this->backdropGet("node/$nid/unsubscribe", array('query' => array('token' => $this->backdropGetToken("node_notify_unsubscribe_$nid"))));
     $this->assertUrl("node/$nid", array(), 'Privileged user should be redirected back to node page.');
     $this->assertPattern('/Unsubscribed from/', 'Privileged user should see "Unsubscribe" message.');
     $this->assertFalse(node_notify_is_subscribed($nid, $this->privileged->uid), 'Privileged user is unsubscribed.');
 
-    $this->drupalLogout();
+    $this->backdropLogout();
   }
 
   /**
@@ -235,18 +225,19 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $type = $this->type->type;
     $nid = $this->node->nid;
 
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array("create $type content", 'subscribe to node'));
+    user_role_grant_permissions(BACKDROP_ANONYMOUS_ROLE, array("create $type content", 'subscribe to node'));
+    cache_clear_all();
     $this->enableContentType($this->type);
 
-    $this->drupalLogin($this->privileged);
-    $this->drupalGet('node/add/' . $this->type->type);
+    $this->backdropLogin($this->privileged);
+    $this->backdropGet('node/add/' . $this->type->type);
     $this->assertFieldByXpath(
       "//input[@type='checkbox' and @id='edit-node-notify-subscribe']", NULL,
       'Checkbox for registerd user.'
     );
 
-    $this->drupalLogout();
-    $this->drupalGet('node/add/' . $this->type->type);
+    $this->backdropLogout();
+    $this->backdropGet('node/add/' . $this->type->type);
     $this->assertFieldByXpath(
       "//input[@type='text' and @id='edit-node-notify-subscribe']", NULL,
       'Text field for anonymous user.'
@@ -265,12 +256,13 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $type = $this->type->type;
     $nid = $this->node->nid;
 
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array("edit any $type content", 'subscribe to node'));
+    user_role_grant_permissions(BACKDROP_ANONYMOUS_ROLE, array("edit any $type content", 'subscribe to node'));
+    cache_clear_all();
     $this->enableContentType($this->type);
 
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
     node_notify_subscribe($nid, $this->privileged->uid);
-    $this->drupalGet("node/$nid/edit");
+    $this->backdropGet("node/$nid/edit");
     $this->assertFieldByXpath(
       "//input[@type='checkbox' and @id='edit-node-notify-subscribe']", '1',
       'Checkbox checked for author.'
@@ -279,10 +271,10 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
       t('Receive comment notifications by email'),
       'Different label if editing is done by the author.'
     );
-    $this->drupalLogout();
+    $this->backdropLogout();
 
-    $this->drupalLogin($this->admin);
-    $this->drupalGet("node/$nid/edit");
+    $this->backdropLogin($this->admin);
+    $this->backdropGet("node/$nid/edit");
     $this->assertFieldByXpath(
       "//input[@type='checkbox' and @id='edit-node-notify-subscribe']", '1',
       'Checkbox checked for admin.'
@@ -292,16 +284,16 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
       'Different label if editing is done not by the author.'
     );
 
-    $this->drupalLogout();
-    $this->drupalGet("node/$nid/edit");
+    $this->backdropLogout();
+    $this->backdropGet("node/$nid/edit");
     $this->assertNoFieldById('edit-node-notify-subscribe', NULL,
       'No field displayed for anonymous user when editing existing node.'
     );
 
-    $tmp_user = $this->drupalCreateUser(array("edit any $type content"));
+    $tmp_user = $this->backdropCreateUser(array("edit any $type content"));
 
-    $this->drupalLogin($tmp_user);
-    $this->drupalGet("node/$nid/edit");
+    $this->backdropLogin($tmp_user);
+    $this->backdropGet("node/$nid/edit");
     $this->assertNoFieldById('edit-node-notify-subscribe', NULL,
       'No field displayed for user with no "administer node subscription" permission when editing existing node.'
     );
@@ -314,15 +306,15 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->enableContentType($this->type);
     $this->setDefaltValueForType($this->type, FALSE);
 
-    $this->drupalLogin($this->privileged);
-    $this->drupalGet('node/add/' . $this->type->type);
+    $this->backdropLogin($this->privileged);
+    $this->backdropGet('node/add/' . $this->type->type);
     $this->assertFieldByXpath(
       "//input[@type='checkbox' and @id='edit-node-notify-subscribe' and not(@checked='checked')]", NULL,
       'Subscription checkbox not checked.'
     );
 
     $this->setDefaltValueForType($this->type, TRUE);
-    $this->drupalGet('node/add/' . $this->type->type);
+    $this->backdropGet('node/add/' . $this->type->type);
     $this->assertFieldByXpath(
       "//input[@type='checkbox' and @id='edit-node-notify-subscribe' and @checked='checked']", NULL,
       'Subscription checkbox checked by default.'
@@ -347,8 +339,8 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     node_notify_subscribe($nid, 0, $email);
     node_notify_subscribe($nid, $this->privileged->uid);
 
-    $this->drupalLogin($this->privileged);
-    $this->drupalGet("node/$nid");
+    $this->backdropLogin($this->privileged);
+    $this->backdropGet("node/$nid");
     $data = $this->postComment($this->node, $this->randomName(), $this->randomName());
 
     $note = node_notify_get_notification($data['id'], $nid, 0, $email);
@@ -357,35 +349,40 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $note = node_notify_get_notification($data['id'], $nid, $this->privileged->uid);
     $this->assertTrue($note->notified == NODE_NOTIFY_SKIPPED, 'Notification skipped -- subscriber is commenter.');
 
-    $this->drupalLogout();
-    variable_set('comment_anonymous_' . $type, '1');
+    $this->backdropLogout();
 
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('post comments'));
-    $this->drupalGet("node/$nid");
+    $node_type = node_type_get_type($this->node->type);
+    $node_type->settings['comment_anonymous'] = 1;
+    node_type_save($node_type);
+
+    user_role_grant_permissions(BACKDROP_ANONYMOUS_ROLE, array('post comments'));
+    cache_clear_all();
+    $this->backdropGet("node/$nid");
     $data = $this->postComment($this->node, $this->randomName(), $this->randomName(), array('mail' => $email, 'name' => $this->randomName()), NULL, FALSE);
     $notification = node_notify_get_notification($data['id'], $nid, 0, $email);
     $this->assertFalse((bool) $notification, 'Notification does not exist -- comment is not published.');
 
-    $this->drupalLogin($this->admin);
-    // $this->drupalGet('admin/content/comment/approval');
-    $this->drupalPost('admin/content/comment/approval', array(
+    $this->backdropLogin($this->admin);
+    // $this->backdropGet('admin/content/comment/approval');
+    $this->backdropPost('admin/content/comment/approval', array(
       'comments[' . $data['id'] . ']' => TRUE,
       'operation' => 'publish',
     ), t('Update'));
-    $this->drupalLogout();
+    $this->backdropLogout();
 
     $notification = node_notify_get_notification($data['id'], $nid, 0, $email);
     $this->assertTrue((bool) $notification, 'Notification exists -- comment was published.');
 
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('skip comment approval'));
-    $this->drupalGet("node/$nid");
+    user_role_grant_permissions(BACKDROP_ANONYMOUS_ROLE, array('skip comment approval'));
+    $this->backdropGet("node/$nid");
     $data = $this->postComment($this->node, $this->randomName(), $this->randomName(), array('mail' => $email, 'name' => $this->randomName()));
     $notification = node_notify_get_notification($data['id'], $nid, 0, $email);
     $this->assertTrue($notification->notified == NODE_NOTIFY_SKIPPED, 'Notification skipped -- subscribe is commenter (anonymous).');
 
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('subscribe to node', 'access content'));
-    $this->drupalLogin($this->privileged);
-    $this->drupalGet("node/$nid");
+    user_role_grant_permissions(BACKDROP_ANONYMOUS_ROLE, array('subscribe to node', 'access content'));
+    cache_clear_all();
+    $this->backdropLogin($this->privileged);
+    $this->backdropGet("node/$nid");
     $data = $this->postComment($this->node, $this->randomName(), $this->randomName());
     $note = node_notify_get_notification($data['id'], $nid, 0, $email);
     $this->assertTrue($note->notified == NODE_NOTIFY_SENT, 'Notification marked as sent.');
@@ -399,16 +396,17 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->enableContentType($this->type);
     $email = '<script>alert("XSS");</script>';
 
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('subscribe to node', 'access content'));
+    user_role_grant_permissions(BACKDROP_ANONYMOUS_ROLE, array('subscribe to node', 'access content'));
+    cache_clear_all();
 
     // This skips permission checking.
     node_notify_subscribe($nid, 0, $email);
     node_notify_subscribe($nid, $this->privileged->uid);
 
-    $this->drupalLogin($this->privileged);
-    $this->drupalGet("node/$nid");
+    $this->backdropLogin($this->privileged);
+    $this->backdropGet("node/$nid");
     $data = $this->postComment($this->node, '<script>alert("XSS");</script>', '<script>alert("XSS");</script>', NULL, NULL, FALSE);
-    $this->drupalLogout();
+    $this->backdropLogout();
 
     // Send notifications.
     node_notify_get_notification($data['id'], $nid, 0, $email);
@@ -420,8 +418,8 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->assertMailNoString('body', '<script>alert("XSS");</script>');
 
     // Check watchdog.
-    $this->drupalLogin($this->admin);
-    $this->drupalGet("node/$nid/subscriptions");
+    $this->backdropLogin($this->admin);
+    $this->backdropGet("node/$nid/subscriptions");
     $this->assertNoRaw('<script>alert("XSS");</script>', 'XSS is filtered out at node subscriptions page.');
 
     // Check if there's XSS in the watchdog log.
@@ -430,151 +428,14 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
       ->fields('w', array('wid'))
       ->execute();
     foreach ($result as $dblog) {
-      $this->drupalGet("admin/reports/event/{$dblog->wid}");
+      $this->backdropGet("admin/reports/event/{$dblog->wid}");
       $this->assertNoRaw('<script>alert("XSS");</script>', "No XSS is in watchdog {$dblog->wid}.");
     }
 
-    $this->drupalLogout();
+    $this->backdropLogout();
 
 
 
-  }
-
-  /**
-   * Integration with Comment Notify.
-   */
-  protected function testNodeNotifyCommentNotifyIntegration() {
-    $type = $this->type->type;
-    $nid = $this->node->nid;
-    $this->enableContentType($this->type);
-    $email = $this->getRandomEmail();
-
-    variable_set('comment_notify_node_types', array($type => $type));
-    variable_set('comment_anonymous_' . $type, '1');
-
-    $perms = array(
-      'subscribe to node',
-      'post comments',
-      'skip comment approval',
-      'subscribe to comments',
-    );
-    user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $perms);
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $perms);
-
-    comment_notify_set_user_notification_setting($this->admin->uid, 1);
-    $this->node->uid = $this->admin->uid;
-    node_save($this->node);
-
-    node_notify_subscribe($nid, 0, $email);
-    node_notify_subscribe($nid, $this->privileged->uid);
-
-    $this->drupalLogin($this->unprivileged);
-    $this->drupalGet("node/$nid");
-    $data = $this->postComment($this->node, $this->randomName(), $this->randomName(), array('notify_type' => 1, 'notify' => TRUE));
-    $note = node_notify_get_notification($data['id'], $nid, 0, $email);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, '#1 Notification to anonymous sent.');
-    $note = node_notify_get_notification($data['id'], $nid, $this->privileged->uid);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, '#1 Notification to user sent.');
-    $note = node_notify_get_notification($data['id'], $nid, $this->unprivileged->uid);
-    $this->assertFalse((boolean) $note, '#1 User is not subscribed 1.');
-    $note = node_notify_get_notification($data['id'], $nid, $this->admin->uid);
-    $this->assertFalse((boolean) $note, '#1 User is not subscribed 2.');
-    $this->drupalLogout();
-
-    node_notify_subscribe($nid, $this->unprivileged->uid);
-
-    $this->drupalLogin($this->privileged);
-    $cid = $data['id'];
-    $this->drupalGet("comment/reply/$nid/$cid");
-    $data = $this->postComment(NULL, $this->randomName(), $this->randomName(), array('notify_type' => 2, 'notify' => TRUE));
-    $note = node_notify_get_notification($data['id'], $nid, $this->unprivileged->uid);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY, '#2 Notification handled by Comment Notify.');
-    $note = node_notify_get_notification($data['id'], $nid, 0, $email);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, '#2 Notification sent.');
-    $note = node_notify_get_notification($data['id'], $nid, $this->privileged->uid);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SKIPPED, '#2 Notification skipped -- commenter is subscriber.');
-    $this->drupalLogout();
-
-    node_notify_subscribe($nid, $this->admin->uid);
-
-    // Anonymous.
-    $cid = $data['id'];
-    $this->drupalGet("comment/reply/$nid/$cid");
-    $data = $this->postComment(NULL, $this->randomName(), $this->randomName(), array('name' => $this->randomName(), 'mail' => $email));
-    $note = node_notify_get_notification($data['id'], $nid, $this->unprivileged->uid);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY, '#3 Notification handled by Comment Notify 1.');
-    $note = node_notify_get_notification($data['id'], $nid, $this->privileged->uid);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY, '#3 Notification handled by Comment Notify 2.');
-    $note = node_notify_get_notification($data['id'], $nid, 0, $email);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SKIPPED, '#3 Notification skipped -- commenter is subscriber.');
-    $note = node_notify_get_notification($data['id'], $nid, $this->admin->uid);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT_BY_COMMENT_NOTIFY, '#3 Notification handled by Comment Notify 3.');
-  }
-
-  /**
-   * Issue with Comment Notify integration.
-   *
-   * Issue #2: original poster is not getting notified when anonymous user
-   * comments on anonymous post.
-   */
-  protected function testNodeNotifyIssue2() {
-    $this->enableContentType($this->type);
-    $email = $this->getRandomEmail();
-    do {
-      $email1 = $this->getRandomEmail();
-    } while ($email == $email1);
-
-    // variable_set('comment_notify_node_types', array($type => $type));
-    variable_set('comment_anonymous_' . $this->type->type, '1');
-
-    $perms = array(
-      'access content',
-      'post comments', 'skip comment approval',
-      'subscribe to comments', 'subscribe to node',
-      // 'access devel information',
-    );
-    // user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, $perms);
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, $perms);
-
-    $this->drupalLogout();
-
-    $node = $this->drupalCreateNode(array(
-      'type' => $this->type->type,
-      'uid' => 0,
-      'comment' => COMMENT_NODE_OPEN,
-    ));
-    node_notify_subscribe($node->nid, 0, $email);
-
-    $this->drupalGet("node/$node->nid");
-    $data = $this->postComment(
-      $node, $this->randomName(), $this->randomName(),
-      array('mail' => $email1, 'name' => $this->randomName())
-    );
-    $this->assertFalse($email == $email1, 'Emails are not the same.');
-
-    $count = db_query('SELECT COUNT(*) FROM {node_notify_subscription}')->fetchColumn();
-    $this->assertTrue($count == 1, 'One subscription exists.');
-
-    $count = db_query('SELECT COUNT(*) FROM {node_notify_notification}')->fetchColumn();
-    $this->assertTrue($count == 1, 'One notification processed.');
-
-    $note = node_notify_get_notification($data['id'], $node->nid, 0, $email);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, 'Anonymous poster notified of follow up comment.');
-
-    $data = $this->postComment(
-      $node, $this->randomName(), $this->randomName(),
-      array(
-        'mail' => $email1,
-        'name' => $this->randomName(),
-        'notify_type' => 1,
-        'notify' => TRUE,
-      )
-    );
-    $count = db_query('SELECT COUNT(*) FROM {node_notify_notification}')->fetchColumn();
-    $this->assertTrue($count == 2, 'Second notification processed.');
-
-    $note = node_notify_get_notification($data['id'], $node->nid, 0, $email);
-    $this->assertTrue($note->notified == NODE_NOTIFY_SENT, 'Anonymous poster notified of second comment.');
   }
 
   /**
@@ -587,16 +448,17 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $this->node->uid = 0;
     node_save($this->node);
 
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array(
+    user_role_grant_permissions(BACKDROP_ANONYMOUS_ROLE, array(
       "edit any $type content",
       'subscribe to node',
       'administer node subscriptions',
     ));
+    cache_clear_all();
 
     $this->enableContentType($this->type);
-    $this->drupalLogout();
+    $this->backdropLogout();
 
-    $this->drupalGet("node/$nid/edit");
+    $this->backdropGet("node/$nid/edit");
     $this->assertNoFieldById('edit-node-notify-subscribe', NULL,
       'No field displayed for anonymous user when editing existing node by anonymous user.'
     );
@@ -613,17 +475,17 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
     $this->assertTrue($count == 1, 'Subscription exists.');
 
-    variable_set('node_notify_expires', '+1 day');
+    config_set('node_notify.settings', 'node_notify_expires', '+1 day');
     node_notify_cron();
     $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
     $this->assertTrue($count == 1, 'Subscription still exists - cron not enabled.');
 
-    variable_set('node_notify_cron', TRUE);
+    config_set('node_notify.settings', 'node_notify_cron', TRUE);
     node_notify_cron();
     $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
     $this->assertTrue($count == 1, 'Subscription still exists - subscription active.');
 
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
     $this->postComment($this->node, $this->randomName(), $this->randomName());
     $count = db_select('node_notify_notification')->countQuery()->execute()->fetchColumn();
     $this->assertTrue($count == 1, 'Notification created.');
@@ -654,7 +516,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $count = db_select('node_notify_subscription')->countQuery()->execute()->fetchColumn();
     $this->assertTrue($count == 1, 'Another subscription created.');
 
-    $this->drupalLogin($this->privileged);
+    $this->backdropLogin($this->privileged);
     $this->postComment($this->node, 'Subject', 'Comment body');
     $count = db_select('node_notify_notification')->countQuery()->execute()->fetchColumn();
     $this->assertTrue($count == 1, 'Notification exists.');
@@ -671,7 +533,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    * Test for issue #1950050.
    */
   protected function testNodeNotifyUserSubscriptionsTab() {
-    $testuser = $this->drupalCreateUser(array(
+    $testuser = $this->backdropCreateUser(array(
       'access content',
       'subscribe to node',
     ));
@@ -679,30 +541,30 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     $user_url = 'user/' . $testuser->uid;
     $user_subscriptions = $user_url . '/subscriptions';
 
-    $this->drupalLogin($this->unprivileged);
-    $this->drupalGet($user_url);
+    $this->backdropLogin($this->unprivileged);
+    $this->backdropGet($user_url);
     $this->assertText(t('Access denied'), 'Access denied to user page');
-    $this->drupalGet($user_subscriptions);
+    $this->backdropGet($user_subscriptions);
     $this->assertText(t('Access denied'), 'Access denied to user subscriptions');
 
-    $this->drupalLogout();
-    $this->drupalLogin($this->privileged);
-    $this->drupalGet($user_url);
+    $this->backdropLogout();
+    $this->backdropLogin($this->privileged);
+    $this->backdropGet($user_url);
     $this->assertText(
       $testuser->name,
       'Access granted to user page for user with "access user profiles" permission.'
     );
-    $this->drupalGet($user_subscriptions);
+    $this->backdropGet($user_subscriptions);
     $this->assertText(
       t('Access denied'),
       'Access denied to user subscriptions for user with "access user profiles" permission.'
     );
 
-    $this->drupalLogout();
-    $this->drupalLogin($this->admin);
-    $this->drupalGet($user_url);
+    $this->backdropLogout();
+    $this->backdropLogin($this->admin);
+    $this->backdropGet($user_url);
     $this->assertText($testuser->name, 'Access granted to user page');
-    $this->drupalGet($user_subscriptions);
+    $this->backdropGet($user_subscriptions);
     $this->assertText(t('No subscriptions yet.'), 'Access granted to user subscriptions');
   }
 
@@ -727,8 +589,11 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
       'type' => 'node_notify_type',
       'title_label' => 'Title',
       'body_label' => 'Body',
+      'settings' => array(
+        'comment_subject_field' => TRUE,
+      ),
     );
-    $content_type = $this->drupalCreateContentType($settings);
+    $content_type = $this->backdropCreateContentType($settings);
     return $content_type;
   }
 
@@ -739,9 +604,9 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    *   Content type object.
    */
   protected function enableContentType($type) {
-    $values = variable_get('node_notify_enabled_types', array());
+    $values = config_get('node_notify.settings', 'node_notify_enabled_types');
     $values[$type->type] = $type->type;
-    variable_set('node_notify_enabled_types', $values);
+    config_set('node_notify.settings', 'node_notify_enabled_types', $values);
   }
 
   /**
@@ -753,16 +618,16 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    *   Default value.
    */
   protected function setDefaltValueForType($type, $value) {
-    $values = variable_get('node_notify_enabled_by_default', array());
+    $values = config_get('node_notify.settings', 'node_notify_enabled_by_default');
     $values[$type->type] = $value;
-    variable_set('node_notify_enabled_by_default', $values);
+    config_set('node_notify.settings', 'node_notify_enabled_by_default', $values);
   }
 
   /**
    * Disables any enabled content types.
    */
   protected function disableContentTypes() {
-    variable_set('node_notify_enabled_types', array());
+    config_set('node_notify.settings', 'node_notify_enabled_types', array());
   }
 
   /**
@@ -800,7 +665,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
     }
 
     $url = $node ? 'node/' . $node->nid : NULL;
-    $this->drupalPost($url, $edit, t('Save'));
+    $this->backdropPost($url, $edit, t('Save'));
 
     $match = array();
     // Get comment ID.
@@ -838,7 +703,7 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
    *   TRUE on pass, FALSE on fail.
    */
   protected function assertMailNoString($field_name, $string) {
-    $mails = $this->drupalGetMails();
+    $mails = $this->backdropGetMails();
     $mail = end($mails);
     $found = strpos($mail[$field_name], $string) !== FALSE;
     return $this->assertFalse($found, t('Text not found in @field of email message: "@string".', array('@field' => $field_name, '@string' => $string)));
@@ -846,9 +711,9 @@ class NodeNotifyTestCase extends DrupalWebTestCase {
   /**
    * Generate a token for the currently logged in user.
    *
-   * The original method is buggy, see https://www.drupal.org/node/1555862.
+   * The original method is buggy, see https://www.backdrop.org/node/1555862.
    */
-  protected function drupalGetToken($value = '') {
-    return drupal_hmac_base64($value, $this->session_id . drupal_get_private_key() . drupal_get_hash_salt());
+  protected function backdropGetToken($value = '') {
+    return backdrop_hmac_base64($value, $this->session_id . backdrop_get_private_key() . backdrop_get_hash_salt());
   }
 }

@@ -712,7 +712,6 @@ function node_notify_send_notification($subscription, $notification, $comment) {
     if ($subscription->uid != $comment->uid || $not_author) {
 
       $subscriber = $subscription->uid ? user_load($subscription->uid) : backdrop_anonymous_user();
-  //dpm($subscriber);
       $node = node_load($comment->nid);
 
       // Last check before sending.
@@ -806,7 +805,6 @@ function node_notify_send_notifications($comment) {
         $notification = (object) $notification;
       }
       if (NODE_NOTIFY_PENDING == $notification->notified) {
-      dpm($subscription);
         node_notify_send_notification($subscription, $notification, $comment);
       }
     }
