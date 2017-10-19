@@ -82,10 +82,21 @@ You should adjust permissions at Administration > People > Permissions
   Allows role to subscribe to comment notifications on nodes.
 
 
-Contact
+License
 -------
 
-Module was developed by CDLC (cdlc.dk). Current maintainer is
+This project is GPL v2 software. See the LICENSE.txt file in this directory for
+complete text.
+
+Current Maintainers
+-------------------
+
+- docwilmot (https://github.com/docwilmot
+
+Credit
+-------
+
+Module was developed by CDLC (cdlc.dk). Drupal maintainer is
 donatas@cdlc.lt.
 
 Center for Digital Pædagogik (cfdp.dk) sponsored development of this
